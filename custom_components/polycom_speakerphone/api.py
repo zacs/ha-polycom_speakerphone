@@ -41,14 +41,19 @@ class PolycomApiClient:
     def __init__(
         self,
         host: str,
+        username: str,
+        password: str,
         session: aiohttp.ClientSession,
-        verify_ssl: bool = True,
+        verify_ssl: bool = False,
     ) -> None:
         """Initialize Polycom API Client."""
         self._host = host
+        self._username = username
+        self._password = password
         self._session = session
         self._verify_ssl = verify_ssl
-        self._base_url = f"{'https' if verify_ssl else 'http'}://{host}/api/v1"
+        self._base_url = f"https://{host}/api/v1"
+        self._auth = aiohttp.BasicAuth(username, password)
 
     async def async_get_device_info(self) -> dict[str, Any]:
         """Get device information."""
@@ -195,6 +200,7 @@ class PolycomApiClient:
                     url=url,
                     headers=headers,
                     json=data,
+                    auth=self._auth,
                     ssl=self._verify_ssl,
                 )
                 _verify_response_or_raise(response)

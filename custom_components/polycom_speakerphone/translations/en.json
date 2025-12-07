@@ -2,9 +2,10 @@
     "config": {
         "step": {
             "user": {
-                "description": "Enter the IP address of your Polycom Trio 8800 speakerphone. For more information, visit: https://github.com/zacs/ha-polycom_speakerphone",
+                "description": "Enter the IP address and password for your Polycom Trio 8800 speakerphone. The username is 'Polycom' by default. For more information, visit: https://github.com/zacs/ha-polycom_speakerphone",
                 "data": {
                     "host": "IP Address",
+                    "password": "Password",
                     "verify_ssl": "Verify SSL Certificate"
                 }
             }

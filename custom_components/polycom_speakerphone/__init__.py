@@ -20,7 +20,9 @@ from homeassistant.loader import async_get_loaded_integration
 from .api import PolycomApiClient
 from .const import (
     CONF_HOST,
+    CONF_PASSWORD,
     CONF_VERIFY_SSL,
+    DEFAULT_USERNAME,
     DOMAIN,
     LOGGER,
     SERVICE_REBOOT,
@@ -60,8 +62,10 @@ async def async_setup_entry(
     # Create API client
     client = PolycomApiClient(
         host=entry.data[CONF_HOST],
-        session=async_get_clientsession(hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, True)),
-        verify_ssl=entry.data.get(CONF_VERIFY_SSL, True),
+        username=DEFAULT_USERNAME,
+        password=entry.data[CONF_PASSWORD],
+        session=async_get_clientsession(hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, False)),
+        verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
     )
     
     # Get initial device info
