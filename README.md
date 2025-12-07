@@ -1,46 +1,89 @@
-# Notice
+# Polycom Speakerphone Integration for Home Assistant
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+A custom Home Assistant integration for monitoring and controlling Polycom Trio 8800 speakerphones via their local REST API.
 
-HAVE FUN! 😎
+## Features
 
-## Why?
+### Device Information
+- Automatically discovers device details (MAC address, model, firmware version)
+- Registers device in Home Assistant with proper identification
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+### Sensors
+- **Call State**: Current call status (Idle, Ringing, Active, etc.)
+- **CPU Usage**: Processor utilization percentage
+- **Memory Usage**: Memory utilization percentage
+- **Memory Total**: Total memory available
+- **Line State**: SIP registration status
+- **Last Called Number**: The last number dialed
+- **Firmware Version**: Current firmware version
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+### Controls
+- **Do Not Disturb Switch**: Enable/disable DND mode
+- **Volume Number**: Control speaker volume (0-100)
 
-## What?
+### Services
+- `polycom_speakerphone.reboot`: Reboot the device
+- `polycom_speakerphone.set_dnd`: Set Do Not Disturb status
+- `polycom_speakerphone.set_volume`: Set volume level
 
-This repository contains multiple files, here is a overview:
+## Installation
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/integration_blueprint/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+### HACS (Recommended)
+1. Open HACS in Home Assistant
+2. Go to "Integrations"
+3. Click the three dots in the top right corner
+4. Select "Custom repositories"
+5. Add this repository URL: `https://github.com/zacs/ha-polycom_speakerphone`
+6. Select category "Integration"
+7. Click "Add"
+8. Install the integration
+9. Restart Home Assistant
 
-## How?
+### Manual Installation
+1. Copy the `custom_components/polycom_speakerphone` directory to your Home Assistant's `custom_components` directory
+2. Restart Home Assistant
 
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `integration_blueprint` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+## Configuration
 
-## Next steps
+1. Go to **Settings** → **Devices & Services**
+2. Click **Add Integration**
+3. Search for **Polycom Speakerphone**
+4. Enter the IP address of your Polycom Trio 8800
+5. Choose whether to verify SSL certificates (typically set to false for local devices)
+6. Click **Submit**
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon) to https://github.com/home-assistant/brands.
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+The integration will automatically discover the device and create all sensors and controls.
+
+## Requirements
+
+- Polycom Trio 8800 speakerphone
+- Network connectivity between Home Assistant and the device
+- REST API enabled on the Polycom device (enabled by default)
+
+## API Documentation
+
+This integration uses the Polycom Voice REST API. For more information, see:
+- [Polycom REST API Reference](https://docs.poly.com/bundle/voice-rest-api-reference-manual-current/page/rest-api-commands-and-structure.html)
+
+## Troubleshooting
+
+### Connection Issues
+- Ensure the device IP address is correct
+- Verify network connectivity between Home Assistant and the device
+- If using HTTPS, try disabling SSL verification during setup
+- Check that the REST API is enabled on the Polycom device
+
+### Missing Sensors
+Some sensors may not appear if the corresponding API endpoints are not available on your device firmware version.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Disclaimer
+
+This is an unofficial integration and is not affiliated with or endorsed by Poly (formerly Polycom).

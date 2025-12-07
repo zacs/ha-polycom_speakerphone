@@ -1,0 +1,43 @@
+"""PolycomEntity class."""
+
+from __future__ import annotations
+
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import ATTRIBUTION, DOMAIN
+from .coordinator import PolycomDataUpdateCoordinator
+
+
+class PolycomEntity(CoordinatorEntity[PolycomDataUpdateCoordinator]):
+    """PolycomEntity class."""
+
+    _attr_attribution = ATTRIBUTION
+
+    def __init__(self, coordinator: PolycomDataUpdateCoordinator) -> None:
+        """Initialize."""
+        super().__init__(coordinator)
+        
+        # Get device information from runtime data
+        runtime_data = coordinator.config_entry.runtime_data
+        device_info = runtime_data.device_info
+        mac_address = runtime_data.mac_address
+        
+        # Extract device details
+        device_vendor = device_info.get("DeviceVendor", "Polycom")
+        model_number = device_info.get("ModelNumber", "Unknown")
+        firmware_version = device_info.get("Firmware", {}).get("Application", "Unknown")
+        device_name = device_info.get("DeviceType", f"{device_vendor} {model_number}")
+        
+        self._attr_device_info = DeviceInfo(
+            identifiers={
+                (DOMAIN, mac_address),
+            },
+            connections={
+                (CONNECTION_NETWORK_MAC, mac_address),
+            },
+            name=device_name,
+            manufacturer=device_vendor,
+            model=model_number,
+            sw_version=firmware_version,
+        )

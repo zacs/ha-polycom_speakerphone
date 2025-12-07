@@ -1,0 +1,13 @@
+{
+  "domain": "polycom_speakerphone",
+  "name": "Polycom Speakerphone",
+  "codeowners": [
+    "@zacs"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/zacs/ha-polycom_speakerphone",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/zacs/ha-polycom_speakerphone/issues",
+  "version": "0.1.0",
+  "requirements": []
+}
