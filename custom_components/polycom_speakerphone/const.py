@@ -17,5 +17,3 @@ DEFAULT_USERNAME = "Polycom"
 
 # Services
 SERVICE_REBOOT = "reboot"
-SERVICE_SET_DND = "set_dnd"
-SERVICE_SET_VOLUME = "set_volume"

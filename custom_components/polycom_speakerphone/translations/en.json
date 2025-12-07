@@ -23,26 +23,6 @@
         "reboot": {
             "name": "Reboot",
             "description": "Reboot the Polycom speakerphone."
-        },
-        "set_dnd": {
-            "name": "Set Do Not Disturb",
-            "description": "Enable or disable Do Not Disturb mode.",
-            "fields": {
-                "enabled": {
-                    "name": "Enabled",
-                    "description": "Enable or disable DND."
-                }
-            }
-        },
-        "set_volume": {
-            "name": "Set Volume",
-            "description": "Set the volume level of the speakerphone.",
-            "fields": {
-                "volume": {
-                    "name": "Volume",
-                    "description": "Volume level (0-100)."
-                }
-            }
         }
     }
 }

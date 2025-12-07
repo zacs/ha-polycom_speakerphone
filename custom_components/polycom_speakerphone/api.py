@@ -57,81 +57,62 @@ class PolycomApiClient:
 
     async def async_get_device_info(self) -> dict[str, Any]:
         """Get device information."""
-        return await self._api_wrapper(
+        response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/mgmt/device/info",
         )
+        return response.get("data", {})
 
     async def async_get_network_info(self) -> dict[str, Any]:
         """Get network information including MAC address."""
-        return await self._api_wrapper(
+        response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/mgmt/network/info",
         )
+        return response.get("data", {})
 
     async def async_get_call_status(self) -> dict[str, Any]:
         """Get current call status."""
-        return await self._api_wrapper(
+        response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/webCallControl/callStatus",
         )
+        # This endpoint may return an error status when no call is active
+        return response.get("data", {})
 
     async def async_get_session_stats(self) -> dict[str, Any]:
         """Get session statistics."""
-        return await self._api_wrapper(
+        response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/mgmt/media/sessionStats",
         )
+        return response.get("data", {})
 
     async def async_get_line_info(self) -> dict[str, Any]:
         """Get line registration information."""
-        return await self._api_wrapper(
+        response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/mgmt/lineInfo",
         )
+        return response.get("data", [])
 
     async def async_get_device_stats(self) -> dict[str, Any]:
         """Get device statistics like CPU and memory."""
-        return await self._api_wrapper(
+        response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/mgmt/device/stats",
         )
+        return response.get("data", {})
 
-    async def async_get_dnd_status(self) -> dict[str, Any]:
-        """Get Do Not Disturb status."""
-        return await self._api_wrapper(
-            method="get",
-            url=f"{self._base_url}/mgmt/doNotDisturb",
-        )
 
-    async def async_set_dnd(self, enabled: bool) -> dict[str, Any]:
-        """Set Do Not Disturb status."""
-        return await self._api_wrapper(
-            method="post",
-            url=f"{self._base_url}/mgmt/doNotDisturb",
-            data={"enabled": enabled},
-        )
 
-    async def async_get_volume(self) -> dict[str, Any]:
-        """Get volume level."""
-        return await self._api_wrapper(
-            method="get",
-            url=f"{self._base_url}/mgmt/audio/volume",
-        )
 
-    async def async_set_volume(self, volume: int) -> dict[str, Any]:
-        """Set volume level (0-100)."""
-        return await self._api_wrapper(
-            method="post",
-            url=f"{self._base_url}/mgmt/audio/volume",
-            data={"volume": volume},
-        )
 
     async def async_reboot(self) -> dict[str, Any]:
         """Reboot the device."""
         return await self._api_wrapper(
             method="post",
-            url=f"{self._base_url}/mgmt/reboot",
+            url=f"{self._base_url}/mgmt/safeReboot",
         )
 
     async def async_get_all_data(self) -> dict[str, Any]:
@@ -144,16 +125,6 @@ class PolycomApiClient:
             call_status = await self.async_get_call_status()
         except Exception:  # noqa: BLE001
             call_status = {}
-        
-        try:
-            dnd_status = await self.async_get_dnd_status()
-        except Exception:  # noqa: BLE001
-            dnd_status = {}
-        
-        try:
-            volume = await self.async_get_volume()
-        except Exception:  # noqa: BLE001
-            volume = {}
         
         try:
             device_stats = await self.async_get_device_stats()
@@ -174,8 +145,6 @@ class PolycomApiClient:
             "device_info": device_info,
             "network_info": network_info,
             "call_status": call_status,
-            "dnd_status": dnd_status,
-            "volume": volume,
             "device_stats": device_stats,
             "line_info": line_info,
             "session_stats": session_stats,

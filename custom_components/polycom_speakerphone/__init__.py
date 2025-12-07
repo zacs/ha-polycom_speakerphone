@@ -26,8 +26,6 @@ from .const import (
     DOMAIN,
     LOGGER,
     SERVICE_REBOOT,
-    SERVICE_SET_DND,
-    SERVICE_SET_VOLUME,
 )
 from .coordinator import PolycomDataUpdateCoordinator
 from .data import PolycomData
@@ -39,19 +37,7 @@ if TYPE_CHECKING:
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
-    Platform.SWITCH,
-    Platform.NUMBER,
 ]
-
-# Service schemas
-SERVICE_SET_DND_SCHEMA = vol.Schema({
-    vol.Required("enabled"): cv.boolean,
-})
-
-SERVICE_SET_VOLUME_SCHEMA = vol.Schema({
-    vol.Required("volume"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
-})
-
 
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(
@@ -71,7 +57,7 @@ async def async_setup_entry(
     # Get initial device info
     device_info = await client.async_get_device_info()
     network_info = await client.async_get_network_info()
-    mac_address = network_info.get("MacAddress", "").lower()
+    mac_address = device_info.get("MACAddress", "").lower()
     
     # Create coordinator
     coordinator = PolycomDataUpdateCoordinator(
@@ -101,26 +87,8 @@ async def async_setup_entry(
         await client.async_reboot()
         LOGGER.info("Polycom device rebooting")
     
-    async def handle_set_dnd(call: ServiceCall) -> None:
-        """Handle the set DND service call."""
-        enabled = call.data["enabled"]
-        await client.async_set_dnd(enabled)
-        await coordinator.async_request_refresh()
-    
-    async def handle_set_volume(call: ServiceCall) -> None:
-        """Handle the set volume service call."""
-        volume = call.data["volume"]
-        await client.async_set_volume(volume)
-        await coordinator.async_request_refresh()
-    
     hass.services.async_register(
         DOMAIN, SERVICE_REBOOT, handle_reboot
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_SET_DND, handle_set_dnd, schema=SERVICE_SET_DND_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_SET_VOLUME, handle_set_volume, schema=SERVICE_SET_VOLUME_SCHEMA
     )
 
     return True
@@ -133,8 +101,6 @@ async def async_unload_entry(
     """Handle removal of an entry."""
     # Unregister services
     hass.services.async_remove(DOMAIN, SERVICE_REBOOT)
-    hass.services.async_remove(DOMAIN, SERVICE_SET_DND)
-    hass.services.async_remove(DOMAIN, SERVICE_SET_VOLUME)
     
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 

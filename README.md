@@ -12,19 +12,12 @@ A custom Home Assistant integration for monitoring and controlling Polycom Trio 
 - **Call State**: Current call status (Idle, Ringing, Active, etc.)
 - **CPU Usage**: Processor utilization percentage
 - **Memory Usage**: Memory utilization percentage
-- **Memory Total**: Total memory available
+- **Memory Total**: Total memory available in MB
 - **Line State**: SIP registration status
-- **Last Called Number**: The last number dialed
-- **Firmware Version**: Current firmware version
-
-### Controls
-- **Do Not Disturb Switch**: Enable/disable DND mode
-- **Volume Number**: Control speaker volume (0-100)
+- **Last Called Number**: The last number dialed (when available)
 
 ### Services
-- `polycom_speakerphone.reboot`: Reboot the device
-- `polycom_speakerphone.set_dnd`: Set Do Not Disturb status
-- `polycom_speakerphone.set_volume`: Set volume level
+- `polycom_speakerphone.reboot`: Safely reboot the device
 
 ## Installation
 
@@ -48,11 +41,13 @@ A custom Home Assistant integration for monitoring and controlling Polycom Trio 
 1. Go to **Settings** → **Devices & Services**
 2. Click **Add Integration**
 3. Search for **Polycom Speakerphone**
-4. Enter the IP address of your Polycom Trio 8800
-5. Choose whether to verify SSL certificates (typically set to false for local devices)
-6. Click **Submit**
+4. Enter the required information:
+   - **IP Address**: The IP address of your Polycom Trio 8800
+   - **Password**: The device password (default username is "Polycom")
+   - **Verify SSL Certificate**: Typically set to false for local devices with self-signed certificates
+5. Click **Submit**
 
-The integration will automatically discover the device and create all sensors and controls.
+The integration will automatically discover the device and create all sensors.
 
 ## Requirements
 

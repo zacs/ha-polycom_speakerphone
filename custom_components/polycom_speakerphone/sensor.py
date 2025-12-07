@@ -106,7 +106,12 @@ class PolycomSensor(PolycomEntity, SensorEntity):
             if isinstance(device_stats, dict):
                 cpu = device_stats.get("CPU", {})
                 if isinstance(cpu, dict):
-                    return cpu.get("Usage")
+                    current = cpu.get("Current")
+                    if current:
+                        try:
+                            return float(current)
+                        except (ValueError, TypeError):
+                            pass
             return None
         
         if key == "memory_usage":
@@ -114,11 +119,13 @@ class PolycomSensor(PolycomEntity, SensorEntity):
             if isinstance(device_stats, dict):
                 memory = device_stats.get("Memory", {})
                 if isinstance(memory, dict):
-                    total = memory.get("Total", 0)
-                    free = memory.get("Free", 0)
-                    if total > 0:
-                        used = total - free
-                        return round((used / total) * 100, 1)
+                    try:
+                        total = int(memory.get("Total", 0))
+                        used = int(memory.get("Used", 0))
+                        if total > 0:
+                            return round((used / total) * 100, 1)
+                    except (ValueError, TypeError):
+                        pass
             return None
         
         if key == "memory_total":
@@ -126,15 +133,18 @@ class PolycomSensor(PolycomEntity, SensorEntity):
             if isinstance(device_stats, dict):
                 memory = device_stats.get("Memory", {})
                 if isinstance(memory, dict):
-                    return memory.get("Total")
+                    try:
+                        total = int(memory.get("Total", 0))
+                        # Convert bytes to MB
+                        return round(total / (1024 * 1024), 1)
+                    except (ValueError, TypeError):
+                        pass
             return None
         
         if key == "line_state":
-            line_info = data.get("line_info", {})
-            if isinstance(line_info, dict):
-                lines = line_info.get("Lines", [])
-                if lines and len(lines) > 0:
-                    return lines[0].get("RegistrationState", "Unknown")
+            line_info = data.get("line_info", [])
+            if isinstance(line_info, list) and len(line_info) > 0:
+                return line_info[0].get("RegistrationStatus", "Unknown")
             return "Unknown"
         
         if key == "last_called_number":

@@ -26,8 +26,9 @@ class PolycomEntity(CoordinatorEntity[PolycomDataUpdateCoordinator]):
         # Extract device details
         device_vendor = device_info.get("DeviceVendor", "Polycom")
         model_number = device_info.get("ModelNumber", "Unknown")
-        firmware_version = device_info.get("Firmware", {}).get("Application", "Unknown")
-        device_name = device_info.get("DeviceType", f"{device_vendor} {model_number}")
+        firmware_version = device_info.get("FirmwareRelease", "Unknown")
+        device_type = device_info.get("DeviceType", "hardwareEndpoint")
+        device_name = f"{device_vendor} {model_number}"
         
         self._attr_device_info = DeviceInfo(
             identifiers={

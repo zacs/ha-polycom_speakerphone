@@ -52,7 +52,7 @@ class PolycomFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 _errors["base"] = "unknown"
             else:
                 # Use MAC address as unique_id
-                mac_address = device_info.get("network_info", {}).get("MacAddress", "")
+                mac_address = device_info.get("network_info", {}).get("MACAddress", "")
                 if mac_address:
                     await self.async_set_unique_id(mac_address.lower())
                     self._abort_if_unique_id_configured()
