@@ -36,7 +36,10 @@ if TYPE_CHECKING:
     from .data import PolycomConfigEntry
 
 PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry

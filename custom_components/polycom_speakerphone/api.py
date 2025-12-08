@@ -59,7 +59,7 @@ class PolycomApiClient:
         """Get device information."""
         response = await self._api_wrapper(
             method="get",
-            url=f"{self._base_url}/mgmt/device/info",
+            url=f"https://{self._host}/api/v2/mgmt/device/info",
         )
         return response.get("data", {})
 
@@ -92,7 +92,7 @@ class PolycomApiClient:
         """Get line registration information."""
         response = await self._api_wrapper(
             method="get",
-            url=f"{self._base_url}/mgmt/lineInfo",
+            url=f"https://{self._host}/api/v2/mgmt/lineInfo",
         )
         return response.get("data", [])
 
@@ -104,10 +104,30 @@ class PolycomApiClient:
         )
         return response.get("data", {})
 
+    async def async_poll_for_status(self) -> dict[str, Any]:
+        """Poll for device status - optimized endpoint for fast polling."""
+        response = await self._api_wrapper(
+            method="get",
+            url=f"{self._base_url}/mgmt/pollForStatus",
+        )
+        return response.get("data", {})
+    
+    async def async_get_communication_info(self) -> dict[str, Any]:
+        """Get communication information including mute state."""
+        response = await self._api_wrapper(
+            method="get",
+            url=f"{self._base_url}/mgmt/media/communicationInfo",
+        )
+        return response.get("data", {})
 
-
-
-
+    async def async_set_mute(self, mute: bool) -> dict[str, Any]:
+        """Set the mute state of the phone."""
+        return await self._api_wrapper(
+            method="post",
+            url=f"{self._base_url}/callctrl/mute",
+            data={"data": {"state": "1" if mute else "0"}},
+        )
+    
     async def async_reboot(self) -> dict[str, Any]:
         """Reboot the device."""
         return await self._api_wrapper(
@@ -119,6 +139,12 @@ class PolycomApiClient:
         """Get all device data at once."""
         device_info = await self.async_get_device_info()
         network_info = await self.async_get_network_info()
+        
+        # Use pollForStatus for fast polling of call state
+        try:
+            poll_status = await self.async_poll_for_status()
+        except Exception:  # noqa: BLE001
+            poll_status = {}
         
         # Try to get other data, but don't fail if endpoints don't exist
         try:
@@ -140,14 +166,21 @@ class PolycomApiClient:
             session_stats = await self.async_get_session_stats()
         except Exception:  # noqa: BLE001
             session_stats = {}
+        
+        try:
+            communication_info = await self.async_get_communication_info()
+        except Exception:  # noqa: BLE001
+            communication_info = {}
 
         return {
             "device_info": device_info,
             "network_info": network_info,
+            "poll_status": poll_status,
             "call_status": call_status,
             "device_stats": device_stats,
             "line_info": line_info,
             "session_stats": session_stats,
+            "communication_info": communication_info,
         }
 
     async def _api_wrapper(

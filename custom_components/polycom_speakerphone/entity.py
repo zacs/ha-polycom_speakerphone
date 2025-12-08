@@ -26,8 +26,14 @@ class PolycomEntity(CoordinatorEntity[PolycomDataUpdateCoordinator]):
         # Extract device details
         device_vendor = device_info.get("DeviceVendor", "Polycom")
         model_number = device_info.get("ModelNumber", "Unknown")
-        firmware_version = device_info.get("FirmwareRelease", "Unknown")
-        device_type = device_info.get("DeviceType", "hardwareEndpoint")
+        
+        # Handle firmware version from v2 API structure
+        firmware = device_info.get("Firmware", {})
+        if isinstance(firmware, dict):
+            firmware_version = firmware.get("Application", "Unknown")
+        else:
+            firmware_version = device_info.get("FirmwareRelease", "Unknown")
+        
         device_name = f"{device_vendor} {model_number}"
         
         self._attr_device_info = DeviceInfo(
