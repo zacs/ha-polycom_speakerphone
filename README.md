@@ -34,6 +34,10 @@ The component really just provides some entities to monitor the speakerphone, wh
 ### Services
 - **`polycom_speakerphone.reboot`**: Safely (after calls have completed) reboot the device
 
+## Screenshot
+
+![alt text](image.png)
+
 ## Installation
 
 ### HACS (Recommended)
