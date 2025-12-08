@@ -1,23 +1,38 @@
 # Polycom Speakerphone Integration for Home Assistant
 
-A custom Home Assistant integration for monitoring and controlling Polycom Trio 8800 speakerphones via their local REST API.
+A custom Home Assistant integration for monitoring and [kind of] controlling Polycom Trio 8800 speakerphones via their local REST API.
+
+The component could probably control more Polycom devices, but I only have some of these 8800s in use. Not that you asked, but they are remarkably cheap (about $30 used), have a pretty great/modern industrial design, and they play nice with Unifi Talk (including supporting paging/auto-answer), so they make really nice devices for a home intercom system that is built around Unifi Talk. Certainly they could do the same with FreePBX, etc, but I haven't fallen down that hole yet. I wanted to be able to make sure the ones I have throughout my house are still online, and have a tiny bit of control over them (albeit a little bit limited due to their slightly older firmware). 
+
+Anyway...
 
 ## Features
 
-### Device Information
-- Automatically discovers device details (MAC address, model, firmware version)
-- Registers device in Home Assistant with proper identification
+The component really just provides some entities to monitor the speakerphone, which are:
 
-### Sensors
-- **Call State**: Current call status (Idle, Ringing, Active, etc.)
-- **CPU Usage**: Processor utilization percentage
-- **Memory Usage**: Memory utilization percentage
-- **Memory Total**: Total memory available in MB
-- **Line State**: SIP registration status
-- **Last Called Number**: The last number dialed (when available)
+### Entities
+
+| Entity | Possible Values | Notes |
+|--------|-----------------|-------|
+| `sensor.<device_name>_phone_state` | Idle, Ringing, Active, etc. | Current phone status from pollForStatus |
+| `sensor.<device_name>_last_call_time` | Timestamp | When the last call occurred |
+| `sensor.<device_name>_call_duration` | Text | Duration information during active calls |
+| `sensor.<device_name>_phone_error` | Text or None | Error messages if any |
+| `sensor.<device_name>_last_called_number` | Phone number | Last dialed number |
+| `binary_sensor.<device_name>_do_not_disturb` | On/Off | DND status |
+| `binary_sensor.<device_name>_muted` | On/Off | Microphone mute status |
+| `binary_sensor.<device_name>_line_registered` | On/Off | SIP line registration status |
+| `binary_sensor.<device_name>_line_active` | On/Off | Line active status |
+| `switch.<device_name>_mute` | On/Off | Control microphone mute |
+| `sensor.<device_name>_cpu_usage` | 0-100% | Processor utilization (Diagnostic) |
+| `sensor.<device_name>_memory_usage` | 0-100% | Memory utilization (Diagnostic) |
+| `sensor.<device_name>_memory_total` | MB | Total memory available (Diagnostic) |
+| `sensor.<device_name>_sip_connection` | Connected, Disconnected, Unknown | SIP server connection status (Diagnostic) |
+| `sensor.<device_name>_uptime` | Timestamp | When the device was last started (Diagnostic) |
+| `button.<device_name>_reboot` | - | Reboot the device (Diagnostic) |
 
 ### Services
-- `polycom_speakerphone.reboot`: Safely reboot the device
+- **`polycom_speakerphone.reboot`**: Safely (after calls have completed) reboot the device
 
 ## Installation
 
@@ -53,7 +68,7 @@ The integration will automatically discover the device and create all sensors.
 
 - Polycom Trio 8800 speakerphone
 - Network connectivity between Home Assistant and the device
-- REST API enabled on the Polycom device (enabled by default)
+- REST API enabled on the Polycom device (not enabled by default)
 
 ## API Documentation
 
