@@ -1,5 +1,5 @@
 {
-  "domain": "polycom_speakerphone",
+  "domain": "poly",
   "name": "Polycom Speakerphone",
   "codeowners": [
     "@zacs"
