@@ -2,9 +2,14 @@
 
 A custom Home Assistant integration for monitoring and [kind of] controlling Polycom Trio 8800 speakerphones via their local REST API.
 
-The component could probably control more Polycom devices, but I only have some of these 8800s in use. Not that you asked, but they are remarkably cheap (about $30 used), have a pretty great/modern industrial design, and they play nice with Unifi Talk (including supporting paging/auto-answer), so they make really nice devices for a home intercom system that is built around Unifi Talk. Certainly they could do the same with FreePBX, etc, but I haven't fallen down that hole yet. I wanted to be able to make sure the ones I have throughout my house are still online, and have a tiny bit of control over them (albeit a little bit limited due to their slightly older firmware). 
+### Device Compatibility
 
-Anyway...
+Polycom's devices seem to sporadically support their API. I only have a Trio 8800 to test with, but it supports only some of the features defined in [their API](https://docs.poly.com/bundle/voice-rest-api-reference-manual-current/page/rest-api-commands-and-structure.html). This component could/should support more models, but it would need to be a model-by-model testing. 
+
+#### Aside/Motivation
+_Not that you asked, but they are remarkably cheap (about $30 used), have a pretty great/modern industrial design, and they play nice with Unifi Talk (including supporting paging/auto-answer), so they make really nice devices for a home intercom system that is built around Unifi Talk. I wanted to be able to make sure the ones I have throughout my house are still online, and have a tiny bit of control over them (albeit a little bit limited due to their slightly older firmware)._
+
+_Anyway..._
 
 ## Features
 
