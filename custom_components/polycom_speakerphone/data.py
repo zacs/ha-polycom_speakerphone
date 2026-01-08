@@ -25,3 +25,4 @@ class PolycomData:
     integration: Integration
     device_info: dict
     mac_address: str
+    host: str

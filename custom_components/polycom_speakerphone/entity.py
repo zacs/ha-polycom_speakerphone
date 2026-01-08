@@ -22,6 +22,7 @@ class PolycomEntity(CoordinatorEntity[PolycomDataUpdateCoordinator]):
         runtime_data = coordinator.config_entry.runtime_data
         device_info = runtime_data.device_info
         mac_address = runtime_data.mac_address
+        host = runtime_data.host
         
         # Extract device details
         device_vendor = device_info.get("DeviceVendor", "Polycom")
@@ -47,4 +48,5 @@ class PolycomEntity(CoordinatorEntity[PolycomDataUpdateCoordinator]):
             manufacturer=device_vendor,
             model=model_number,
             sw_version=firmware_version,
+            configuration_url=f"https://{host}",
         )

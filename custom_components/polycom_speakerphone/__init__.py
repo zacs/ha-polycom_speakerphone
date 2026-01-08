@@ -61,6 +61,7 @@ async def async_setup_entry(
     device_info = await client.async_get_device_info()
     network_info = await client.async_get_network_info()
     mac_address = device_info.get("MACAddress", "").lower()
+    host = entry.data[CONF_HOST]
     
     # Create coordinator
     coordinator = PolycomDataUpdateCoordinator(
@@ -76,6 +77,7 @@ async def async_setup_entry(
         coordinator=coordinator,
         device_info=device_info,
         mac_address=mac_address,
+        host=host,
     )
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
