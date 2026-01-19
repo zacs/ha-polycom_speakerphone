@@ -4,7 +4,7 @@ from logging import Logger, getLogger
 
 LOGGER: Logger = getLogger(__package__)
 
-DOMAIN = "polycom_speakerphone"
+DOMAIN = "poly"
 ATTRIBUTION = "Data provided by Polycom Trio 8800 REST API"
 
 # Configuration
