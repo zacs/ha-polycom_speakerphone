@@ -60,14 +60,25 @@ The component really just provides some entities to monitor the speakerphone, wh
 1. Copy the `custom_components/polycom_speakerphone` directory to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
 
+## Speakerphone Setup
+
+You need to enable the REST API on the Trio. 
+
+1. Head to https://<trio_ip> and login as admin. 
+   - If you bought a used device, you may need to factory reset to set your own admin password.
+2. Go to _Settings > Applications_ in the menu bar. 
+3. Expand the "REST API" section in the main content area.
+4. Tick the box to enable the REST API. 
+5. Press "Save."
+
 ## Configuration
 
-1. Go to **Settings** → **Devices & Services**
+1. Go to **Settings** > **Devices & Services**
 2. Click **Add Integration**
 3. Search for **Polycom Speakerphone**
 4. Enter the required information:
    - **IP Address**: The IP address of your Polycom Trio 8800
-   - **Password**: The device password (default username is "Polycom")
+   - **Password**: The device password
    - **Verify SSL Certificate**: Typically set to false for local devices with self-signed certificates
 5. Click **Submit**
 
@@ -76,7 +87,6 @@ The integration will automatically discover the device and create all sensors.
 ## Requirements
 
 - Polycom Trio 8800 speakerphone
-- Network connectivity between Home Assistant and the device
 - REST API enabled on the Polycom device (not enabled by default)
 
 ## API Documentation
@@ -87,12 +97,14 @@ This integration uses the Polycom Voice REST API. For more information, see:
 ## Troubleshooting
 
 ### Connection Issues
-- Ensure the device IP address is correct
-- Verify network connectivity between Home Assistant and the device
-- If using HTTPS, try disabling SSL verification during setup
+- Confirm connectivity and credentials by visiting `https://<YOUR_IP>/api/v2/mgmt/device/info` with username `Polycom` and your admin password. You should see a JSON blob of device details. 
+- Ensure the device IP address is correct 
+- Verify network connectivity between Home Assistant and the device (ping the device IP from Home Assistant's host)
+- Try disabling SSL verification during setup
 - Check that the REST API is enabled on the Polycom device
 
 ### Missing Sensors
+
 Some sensors may not appear if the corresponding API endpoints are not available on your device firmware version.
 
 ## Contributing
