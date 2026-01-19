@@ -8,6 +8,6 @@
   "documentation": "https://github.com/zacs/ha-polycom_speakerphone",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/zacs/ha-polycom_speakerphone/issues",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requirements": []
 }
