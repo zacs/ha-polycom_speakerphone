@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
+# Fail on deprecations raised from this integration's own code
+filterwarnings = ["error::DeprecationWarning:custom_components"]

@@ -11,22 +11,49 @@ from .api import (
     PolycomApiClientAuthenticationError,
     PolycomApiClientError,
 )
+from .const import DOMAIN, LOGGER, SCAN_INTERVAL
 
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from .api import PolycomApiClient
     from .data import PolycomConfigEntry
 
 
 # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-class PolycomDataUpdateCoordinator(DataUpdateCoordinator):
+class PolycomDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching data from the API."""
 
     config_entry: PolycomConfigEntry
 
-    async def _async_update_data(self) -> Any:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: PolycomConfigEntry,
+        client: PolycomApiClient,
+    ) -> None:
+        """Initialize the coordinator."""
+        super().__init__(
+            hass,
+            LOGGER,
+            config_entry=config_entry,
+            name=DOMAIN,
+            update_interval=SCAN_INTERVAL,
+        )
+        self.client = client
+
+    async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
         try:
-            return await self.config_entry.runtime_data.client.async_get_all_data()
+            return await self.client.async_get_all_data()
         except PolycomApiClientAuthenticationError as exception:
-            raise ConfigEntryAuthFailed(exception) from exception
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from exception
         except PolycomApiClientError as exception:
-            raise UpdateFailed(exception) from exception
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": str(exception)},
+            ) from exception

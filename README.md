@@ -4,7 +4,7 @@ A custom Home Assistant integration for monitoring and [kind of] controlling Pol
 
 ### Device Compatibility
 
-Polycom's devices seem to sporadically support their API. I only have a Trio 8800 to test with, but it supports only some of the features defined in [their API](https://docs.poly.com/bundle/voice-rest-api-reference-manual-current/page/rest-api-commands-and-structure.html). This component could/should support more models, but it would need to be a model-by-model testing. 
+Polycom's devices seem to sporadically support their API. I only have a Trio 8800 to test with, but it supports only some of the features defined in [their API](https://kaas.hpcloud.hp.com/pdf-public/pdf_14672705_en-US-1.pdf). This component could/should support more models, but it would need to be a model-by-model testing. 
 
 #### Aside/Motivation
 _Not that you asked, but they are remarkably cheap (about $30 used), have a pretty great/modern industrial design, and they play nice with Unifi Talk (including supporting paging/auto-answer), so they make really nice devices for a home intercom system that is built around Unifi Talk. I wanted to be able to make sure the ones I have throughout my house are still online, and have a tiny bit of control over them (albeit a little bit limited due to their slightly older firmware)._
@@ -13,17 +13,20 @@ _Anyway..._
 
 ## Features
 
-The component really just provides some entities to monitor the speakerphone, which are:
+The component provides entities to monitor the speakerphone, and actions to place and handle calls.
 
 ### Entities
 
 | Entity | Possible Values | Notes |
 |--------|-----------------|-------|
-| `sensor.<device_name>_phone_state` | Idle, Ringing, Active, etc. | Current phone status from pollForStatus |
+| `sensor.<device_name>_phone_state` | Idle, Active, Error | Current phone status from pollForStatus |
 | `sensor.<device_name>_last_call_time` | Timestamp | When the last call occurred |
-| `sensor.<device_name>_call_duration` | Text | Duration information during active calls |
-| `sensor.<device_name>_phone_error` | Text or None | Error messages if any |
+| `sensor.<device_name>_call_duration` | Seconds | How long the current call has lasted |
+| `sensor.<device_name>_remote_party` | Name or number | Who's on the current call |
+| `sensor.<device_name>_phone_error` | Text or None | The phone's error message, if it reports one |
 | `sensor.<device_name>_last_called_number` | Phone number | Last dialed number |
+| `sensor.<device_name>_missed_calls` | Number | Calls in the phone's missed call log |
+| `binary_sensor.<device_name>_ringing` | On/Off | A call is ringing |
 | `binary_sensor.<device_name>_do_not_disturb` | On/Off | DND status |
 | `binary_sensor.<device_name>_muted` | On/Off | Microphone mute status |
 | `binary_sensor.<device_name>_line_registered` | On/Off | SIP line registration status |
@@ -31,13 +34,31 @@ The component really just provides some entities to monitor the speakerphone, wh
 | `switch.<device_name>_mute` | On/Off | Control microphone mute |
 | `sensor.<device_name>_cpu_usage` | 0-100% | Processor utilization (Diagnostic) |
 | `sensor.<device_name>_memory_usage` | 0-100% | Memory utilization (Diagnostic) |
-| `sensor.<device_name>_memory_total` | MB | Total memory available (Diagnostic) |
+| `sensor.<device_name>_memory_total` | MiB | Total memory available (Diagnostic) |
 | `sensor.<device_name>_sip_connection` | Connected, Disconnected, Unknown | SIP server connection status (Diagnostic) |
 | `sensor.<device_name>_uptime` | Timestamp | When the device was last started (Diagnostic) |
 | `button.<device_name>_reboot` | - | Reboot the device (Diagnostic) |
 
-### Services
-- **`polycom_speakerphone.reboot`**: Safely (after calls have completed) reboot the device
+The ringing, remote party and missed calls entities are only created if the phone answers the API endpoints they need when the integration starts.
+
+### Actions
+
+Every action takes an optional `config_entry_id` to choose the speakerphone; with a single speakerphone it can be left out.
+
+- **`poly.dial`**: Call an extension, phone number or SIP address. Takes `number` and an optional `line` (defaults to line 1).
+- **`poly.answer_call`**: Answer the incoming call.
+- **`poly.reject_call`**: Reject the incoming call.
+- **`poly.end_call`**: Hang up the current call.
+- **`poly.reboot`**: Safely (after calls have completed) reboot a speakerphone. The **Reboot** button entity does the same thing.
+
+For example, to call the kitchen from the office speakerphone when a button is pressed:
+
+```yaml
+action: poly.dial
+data:
+  config_entry_id: <pick the office speakerphone in the action editor>
+  number: "1002"
+```
 
 ## Screenshot
 
@@ -57,7 +78,7 @@ The component really just provides some entities to monitor the speakerphone, wh
 9. Restart Home Assistant
 
 ### Manual Installation
-1. Copy the `custom_components/polycom_speakerphone` directory to your Home Assistant's `custom_components` directory
+1. Copy the `custom_components/poly` directory to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
 
 ## Speakerphone Setup
@@ -77,22 +98,34 @@ You need to enable the REST API on the Trio.
 2. Click **Add Integration**
 3. Search for **Polycom Speakerphone**
 4. Enter the required information:
-   - **IP Address**: The IP address of your Polycom Trio 8800
+   - **IP address**: The IP address of your Polycom Trio 8800
    - **Password**: The device password
-   - **Verify SSL Certificate**: Typically set to false for local devices with self-signed certificates
+   - **Verify SSL certificate**: Typically set to false for local devices with self-signed certificates
 5. Click **Submit**
 
 The integration will automatically discover the device and create all sensors.
 
+### Changing the IP address or password
+
+- **New IP address**: on the integration's entry in **Settings** > **Devices & Services**, open the menu and choose **Reconfigure**. Re-adding the same phone at its new address also updates the existing entry.
+- **New password**: Home Assistant notices the phone rejecting the old password and asks you to re-authenticate.
+
+## Removal
+
+1. Go to **Settings** > **Devices & Services** and select **Polycom Speakerphone**.
+2. Open the menu on each speakerphone's entry and choose **Delete**.
+3. If you no longer want the integration, remove it in HACS (or delete `custom_components/poly`) and restart Home Assistant.
+
 ## Requirements
 
+- Home Assistant 2025.2.4 or newer
 - Polycom Trio 8800 speakerphone
 - REST API enabled on the Polycom device (not enabled by default)
 
 ## API Documentation
 
 This integration uses the Polycom Voice REST API. For more information, see:
-- [Polycom REST API Reference](https://docs.poly.com/bundle/voice-rest-api-reference-manual-current/page/rest-api-commands-and-structure.html)
+- [Poly UC Software and Poly Voice Software REST API Reference Manual (PDF)](https://kaas.hpcloud.hp.com/pdf-public/pdf_14672705_en-US-1.pdf)
 
 ## Troubleshooting
 

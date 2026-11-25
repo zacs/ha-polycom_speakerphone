@@ -2,24 +2,43 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.exceptions import HomeAssistantError
 
-from .entity import PolycomEntity
+from .api import PolycomApiClientError
+from .const import DOMAIN
+from .entity import PolycomEntity, phone_muted
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from collections.abc import Awaitable, Callable
 
-    from .coordinator import PolycomDataUpdateCoordinator
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+    from .api import PolycomApiClient
     from .data import PolycomConfigEntry
 
-ENTITY_DESCRIPTIONS = (
-    SwitchEntityDescription(
+# Send one command to the phone at a time
+PARALLEL_UPDATES = 1
+
+
+@dataclass(frozen=True, kw_only=True)
+class PolycomSwitchEntityDescription(SwitchEntityDescription):
+    """Describes a Polycom switch."""
+
+    is_on_fn: Callable[[dict[str, Any]], bool | None]
+    set_fn: Callable[[PolycomApiClient, bool], Awaitable[Any]]
+
+
+ENTITY_DESCRIPTIONS: tuple[PolycomSwitchEntityDescription, ...] = (
+    PolycomSwitchEntityDescription(
         key="mute",
-        name="Mute",
-        icon="mdi:microphone-off",
+        translation_key="mute",
+        is_on_fn=phone_muted,
+        set_fn=lambda client, on: client.async_set_mute(mute=on),
     ),
 )
 
@@ -27,7 +46,7 @@ ENTITY_DESCRIPTIONS = (
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
     entry: PolycomConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the switch platform."""
     async_add_entities(
@@ -42,45 +61,29 @@ async def async_setup_entry(
 class PolycomSwitch(PolycomEntity, SwitchEntity):
     """polycom_speakerphone Switch class."""
 
-    def __init__(
-        self,
-        coordinator: PolycomDataUpdateCoordinator,
-        entity_description: SwitchEntityDescription,
-    ) -> None:
-        """Initialize the switch class."""
-        super().__init__(coordinator)
-        self.entity_description = entity_description
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{entity_description.key}"
+    entity_description: PolycomSwitchEntityDescription
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
-        data = self.coordinator.data
-        key = self.entity_description.key
-        
-        if key == "mute":
-            communication_info = data.get("communication_info", {})
-            if isinstance(communication_info, dict):
-                mute_state = communication_info.get("PhoneMuteState", "False")
-                return mute_state == "True"
-            return None
-        
-        return None
+        return self.entity_description.is_on_fn(self.coordinator.data)
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:  # noqa: ARG002
         """Turn the switch on."""
-        key = self.entity_description.key
-        
-        if key == "mute":
-            client = self.coordinator.config_entry.runtime_data.client
-            await client.async_set_mute(True)
-            await self.coordinator.async_request_refresh()
+        await self._async_set(on=True)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:  # noqa: ARG002
         """Turn the switch off."""
-        key = self.entity_description.key
-        
-        if key == "mute":
-            client = self.coordinator.config_entry.runtime_data.client
-            await client.async_set_mute(False)
-            await self.coordinator.async_request_refresh()
+        await self._async_set(on=False)
+
+    async def _async_set(self, *, on: bool) -> None:
+        """Send the new state to the phone, then refresh."""
+        try:
+            await self.entity_description.set_fn(self.coordinator.client, on)
+        except PolycomApiClientError as exception:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="action_failed",
+                translation_placeholders={"error": str(exception)},
+            ) from exception
+        await self.coordinator.async_request_refresh()

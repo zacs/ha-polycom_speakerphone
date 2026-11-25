@@ -1,0 +1,18 @@
+{
+  "data": {
+    "Lines": [
+      {
+        "LineNumber": "1",
+        "State": "off"
+      }
+    ],
+    "MWI": {
+      "Color": "red",
+      "State": "PowerSavingMode"
+    },
+    "Mute": {
+      "State": "off"
+    }
+  },
+  "Status": "2000"
+}

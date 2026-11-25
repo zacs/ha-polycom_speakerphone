@@ -1,0 +1,31 @@
+{
+  "data": {
+    "VLANIDOption": "129",
+    "DHCP": "enabled",
+    "LANPortStatus": "active",
+    "UpgradeServer": "https://downloads.polycom.com/voice/software/Poly_UC_Software_7_2_8_0031_Trio8800_release_sig/",
+    "DNSServer": "192.168.1.2",
+    "IPV6Address": "::",
+    "DHCPServer": "192.168.1.1",
+    "DHCPBootServerUseOption": "Custom+Option66",
+    "LANSpeed": "1000Mbps",
+    "DHCPBootServerOption": "161",
+    "DHCPBootServerOptionType": "String",
+    "DefaultGateway": "192.168.1.1",
+    "IPV4Address": "192.168.1.50",
+    "ZTPStatus": "disabled",
+    "DHCPOption60Format": "ASCII String",
+    "SubnetMask": "255.255.255.0",
+    "AlternateDNSServer": "192.168.1.3",
+    "DNSDomain": "",
+    "SNTPAddress": "pool.ntp.org",
+    "LLDP": "enabled",
+    "CDPCompatibility": "enabled",
+    "VLANID": "",
+    "ProvServerAddress": "",
+    "VLANDiscoveryMode": "Fixed",
+    "ProvServerType": "FTP",
+    "ProvServerUser": "PlcmSpIp"
+  },
+  "Status": "2000"
+}
