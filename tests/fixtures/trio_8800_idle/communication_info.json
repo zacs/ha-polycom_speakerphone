@@ -1,0 +1,10 @@
+{
+  "data": {
+    "CommunicationType": [
+      "Idle"
+    ],
+    "FarEndMuteState": [],
+    "PhoneMuteState": "False"
+  },
+  "Status": "2000"
+}

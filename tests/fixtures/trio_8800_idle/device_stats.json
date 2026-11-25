@@ -1,0 +1,30 @@
+{
+  "data": {
+    "RAMDiskSize": "67108864",
+    "CPU": {
+      "Current": "35.5",
+      "Average": "30.8"
+    },
+    "Memory": {
+      "Used": "284389376",
+      "polyapp": {
+        "uordblks": "23100992",
+        "hblkhd": "12644352",
+        "arena": "11247616",
+        "fordblks": "790976"
+      },
+      "Total": "519995392",
+      "Free": "235606016",
+      "ComAS": "0",
+      "Cached": "221212672",
+      "SReclaim": "0",
+      "pgui": {
+        "uordblks": "78848008",
+        "hblkhd": "60137888",
+        "arena": "18804320",
+        "fordblks": "94200"
+      }
+    }
+  },
+  "Status": "2000"
+}

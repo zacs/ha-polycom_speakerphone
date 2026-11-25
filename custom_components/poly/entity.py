@@ -8,6 +8,7 @@ from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import device_mac_address
 from .const import ATTRIBUTION, DOMAIN
 from .coordinator import PolycomDataUpdateCoordinator
 
@@ -43,7 +44,7 @@ class PolycomEntity(CoordinatorEntity[PolycomDataUpdateCoordinator]):
         device_info = coordinator.data.get("device_info", {})
         device_vendor = device_info.get("DeviceVendor", "Polycom")
         model_number = device_info.get("ModelNumber", "Unknown")
-        mac_address = str(device_info.get("MACAddress", "")).lower()
+        mac_address = device_mac_address(device_info)
 
         # Handle firmware version from v2 API structure
         firmware = device_info.get("Firmware", {})

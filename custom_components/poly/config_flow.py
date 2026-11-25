@@ -15,6 +15,7 @@ from .api import (
     PolycomApiClientAuthenticationError,
     PolycomApiClientCommunicationError,
     PolycomApiClientError,
+    device_mac_address,
 )
 from .const import DEFAULT_USERNAME, DOMAIN, LOGGER
 
@@ -55,9 +56,9 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
         """Handle a flow initialized by the user."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            device, errors = await self._async_validate(user_input)
-            if device is not None:
-                if mac_address := _mac_address(device):
+            device_info, errors = await self._async_validate(user_input)
+            if device_info is not None:
+                if mac_address := device_mac_address(device_info):
                     await self.async_set_unique_id(mac_address)
                     # Same phone at a new address: update it instead of duplicating
                     self._abort_if_unique_id_configured(
@@ -65,7 +66,6 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
                     )
                 self._async_abort_entries_match({CONF_HOST: user_input[CONF_HOST]})
 
-                device_info = device["device_info"]
                 device_name = device_info.get("DeviceVendor", "Polycom")
                 model = device_info.get("ModelNumber", "Unknown")
                 return self.async_create_entry(
@@ -96,10 +96,10 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         reauth_entry = self._get_reauth_entry()
         if user_input is not None:
-            device, errors = await self._async_validate(
+            device_info, errors = await self._async_validate(
                 {**reauth_entry.data, **user_input}
             )
-            if device is not None:
+            if device_info is not None:
                 return self.async_update_reload_and_abort(
                     reauth_entry, data_updates=user_input
                 )
@@ -119,11 +119,11 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         reconfigure_entry = self._get_reconfigure_entry()
         if user_input is not None:
-            device, errors = await self._async_validate(
+            device_info, errors = await self._async_validate(
                 {**reconfigure_entry.data, **user_input}
             )
-            if device is not None:
-                mac_address = _mac_address(device)
+            if device_info is not None:
+                mac_address = device_mac_address(device_info)
                 if mac_address and reconfigure_entry.unique_id:
                     await self.async_set_unique_id(mac_address)
                     self._abort_if_unique_id_mismatch(reason="wrong_device")
@@ -142,7 +142,7 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
     async def _async_validate(
         self, data: Mapping[str, Any]
     ) -> tuple[dict[str, Any] | None, dict[str, str]]:
-        """Connect to the phone, returning its details or form errors."""
+        """Connect to the phone, returning its device info or form errors."""
         verify_ssl = data.get(CONF_VERIFY_SSL, False)
         client = PolycomApiClient(
             host=data[CONF_HOST],
@@ -161,18 +161,4 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
         except PolycomApiClientError:
             LOGGER.exception("Unexpected error connecting to %s", data[CONF_HOST])
             return None, {"base": "unknown"}
-
-        # Only used for its MAC address, which device info also carries
-        try:
-            network_info = await client.async_get_network_info()
-        except PolycomApiClientError:
-            network_info = {}
-        return {"device_info": device_info, "network_info": network_info}, {}
-
-
-def _mac_address(device: dict[str, Any]) -> str | None:
-    """Return the phone's MAC address in the form used for unique IDs."""
-    mac_address = device["network_info"].get("MACAddress") or device["device_info"].get(
-        "MACAddress"
-    )
-    return str(mac_address).lower() if mac_address else None
+        return device_info, {}

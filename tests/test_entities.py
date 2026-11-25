@@ -13,7 +13,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.poly.const import DOMAIN
 
-from .conftest import DEFAULT_PAYLOADS, MAC, mock_device
+from .conftest import MAC, load_data, mock_device
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
@@ -59,17 +59,19 @@ async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
         ("sensor", "last_call_time", "2025-08-03T17:35:57+00:00"),
         ("sensor", "call_duration", STATE_UNKNOWN),
         ("sensor", "phone_error", STATE_UNKNOWN),
-        ("sensor", "cpu_usage", "12.5"),
-        ("sensor", "memory_usage", "50.0"),
-        ("sensor", "memory_total", "1024.0"),
-        ("sensor", "last_called_number", "5551234"),
+        ("sensor", "cpu_usage", "35.5"),
+        # 284389376 of 519995392 bytes; "Used" includes the page cache
+        ("sensor", "memory_usage", "54.7"),
+        ("sensor", "memory_total", "495.9"),
+        # sessionStats is an empty list while idle
+        ("sensor", "last_called_number", STATE_UNKNOWN),
         ("sensor", "sip_connection", "Connected"),
-        # NOW minus 1 day, 2 hours, 3 minutes, 4 seconds
-        ("sensor", "uptime", "2025-08-31T09:56:56+00:00"),
+        # NOW minus 15 days, 23 hours, 15 minutes, 32 seconds
+        ("sensor", "uptime", "2025-08-16T12:44:28+00:00"),
         ("binary_sensor", "dnd_status", STATE_OFF),
         ("binary_sensor", "mute_status", STATE_OFF),
         ("binary_sensor", "line_registered", STATE_ON),
-        ("binary_sensor", "line_active", STATE_ON),
+        ("binary_sensor", "line_active", STATE_OFF),
         ("switch", "mute", STATE_OFF),
         ("button", "reboot", STATE_UNKNOWN),
     ],
@@ -83,7 +85,7 @@ async def test_entity_states(
     key: str,
     expected: str,
 ) -> None:
-    """Each entity reports the value parsed from the device payloads."""
+    """Each entity reports the value parsed from a real idle Trio 8800."""
     freezer.move_to(NOW)
     mock_device(aioclient_mock)
     await setup_entry(hass, mock_config_entry)
@@ -134,11 +136,11 @@ async def test_device_info(
     )
     assert len(devices) == 1
     device = devices[0]
-    assert device.identifiers == {(DOMAIN, MAC.lower())}
+    assert device.identifiers == {(DOMAIN, MAC)}
     assert device.manufacturer == "Polycom"
     assert device.model == "Trio 8800"
     assert device.name == "Polycom Trio 8800"
-    assert device.sw_version == "7.2.6.0019"
+    assert device.sw_version == "7.2.8.0031 17-Mar-24 05:02"
     assert device.configuration_url == "https://192.168.1.50"
     assert (dr.CONNECTION_NETWORK_MAC, "64:16:7f:12:34:56") in device.connections
 
@@ -149,7 +151,8 @@ async def test_phone_state_falls_back_to_call_status(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """When pollForStatus is unavailable, callStatus provides the state."""
-    mock_device(aioclient_mock, poll_status=500)
+    # The State field is assumed; no capture of callStatus during a call yet
+    mock_device(aioclient_mock, poll_status=500, call_status={"State": "Connected"})
     await setup_entry(hass, mock_config_entry)
 
     entity_id = get_entity_id(hass, "sensor", mock_config_entry, "phone_state")
@@ -195,6 +198,7 @@ async def test_state_data_parsing(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Duration and error text are surfaced from pollForStatus StateData."""
+    # The StateData wording is assumed; no capture during a call yet
     mock_device(
         aioclient_mock,
         poll_status={"State": "Active", "StateData": "Call duration 00:01:23"},
@@ -245,17 +249,20 @@ async def test_uptime_ignores_poll_jitter(
     mock_device(aioclient_mock)
     await setup_entry(hass, mock_config_entry)
     entity_id = get_entity_id(hass, "sensor", mock_config_entry, "uptime")
-    assert hass.states.get(entity_id).state == "2025-08-31T09:56:56+00:00"
+    assert hass.states.get(entity_id).state == "2025-08-16T12:44:28+00:00"
 
     # 30s of wall time passes but the device reports 31s more uptime
-    device_info = {
-        **DEFAULT_PAYLOADS["device_info"],
-        "UpTime": {"Days": "1", "Hours": "2", "Minutes": "3", "Seconds": "35"},
+    device_info = load_data("device_info")
+    device_info["UpTime"] = {
+        "Days": "15",
+        "Hours": "23",
+        "Minutes": "16",
+        "Seconds": "3",
     }
     aioclient_mock.clear_requests()
     mock_device(aioclient_mock, device_info=device_info)
     await poll(hass, freezer)
-    assert hass.states.get(entity_id).state == "2025-08-31T09:56:56+00:00"
+    assert hass.states.get(entity_id).state == "2025-08-16T12:44:28+00:00"
 
     # Device rebooted a minute before the next poll
     device_info["UpTime"] = {"Days": "0", "Hours": "0", "Minutes": "1", "Seconds": "0"}

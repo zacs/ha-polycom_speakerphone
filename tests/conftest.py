@@ -1,14 +1,17 @@
 """
 Shared fixtures for the Polycom Speakerphone tests.
 
-The payloads below mirror the fields the integration parses from the Poly
-REST API. They are synthesized from the integration's own parsing logic, not
-captured from a real device.
+By default every endpoint answers with an anonymized capture from a real,
+idle Trio 8800 (see ``fixtures/README.md``). Tests override single endpoints
+to cover other states.
 """
 
 from __future__ import annotations
 
 import copy
+import json
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -25,13 +28,14 @@ if TYPE_CHECKING:
         AiohttpClientMocker,
     )
 
+FIXTURES = Path(__file__).parent / "fixtures" / "trio_8800_idle"
+
 HOST = "192.168.1.50"
 PASSWORD = "secret"  # noqa: S105
-MAC = "64167F123456"
+MAC = "64167f123456"
 
 ENDPOINTS: dict[str, tuple[str, str]] = {
     "device_info": ("get", "/api/v2/mgmt/device/info"),
-    "network_info": ("get", "/api/v1/mgmt/network/info"),
     "poll_status": ("get", "/api/v1/mgmt/pollForStatus"),
     "call_status": ("get", "/api/v1/webCallControl/callStatus"),
     "device_stats": ("get", "/api/v1/mgmt/device/stats"),
@@ -42,38 +46,26 @@ ENDPOINTS: dict[str, tuple[str, str]] = {
     "reboot": ("post", "/api/v1/mgmt/safeReboot"),
 }
 
-DEFAULT_PAYLOADS: dict[str, Any] = {
-    "device_info": {
-        "ModelNumber": "Trio 8800",
-        "DeviceVendor": "Polycom",
-        "MACAddress": MAC,
-        "Firmware": {"Application": "7.2.6.0019"},
-        "UpTime": {"Days": "1", "Hours": "2", "Minutes": "3", "Seconds": "4"},
-    },
-    "network_info": {"MACAddress": MAC, "IPV4Address": HOST},
-    "poll_status": {
-        "State": "Idle",
-        "StateData": "Time of last call 2025-08-03T10:35:57",
-    },
-    "call_status": {"State": "Connected"},
-    "device_stats": {
-        "CPU": {"Current": "12.5", "Average": "10.0"},
-        "Memory": {"Total": "1073741824", "Used": "536870912"},
-    },
-    "line_info": [
-        {
-            "LineNumber": "1",
-            "RegistrationStatus": "Registered",
-            "DoNotDisturb": "False",
-            "Active": "True",
-            "CallServers": [{"Working": "True"}],
-        }
-    ],
-    "session_stats": {"LastCalledNumber": "5551234"},
-    "communication_info": {"PhoneMuteState": "False"},
-    "mute": {},
-    "reboot": {},
-}
+
+@dataclass
+class RawBody:
+    """An override giving the whole response body, not just its ``data``."""
+
+    body: Any
+
+
+def load_body(name: str) -> Any:
+    """Return the captured response body for an endpoint."""
+    path = FIXTURES / f"{name}.json"
+    if not path.exists():
+        # No capture of the command endpoints yet; assume plain success
+        return {"Status": "2000"}
+    return json.loads(path.read_text())
+
+
+def load_data(name: str) -> Any:
+    """Return the ``data`` part of a captured response, safe to modify."""
+    return copy.deepcopy(load_body(name)["data"])
 
 
 def mock_device(
@@ -84,17 +76,20 @@ def mock_device(
     """
     Register mocked responses for every endpoint of one device.
 
-    An override may be a payload for the response's ``data`` key, an ``int``
-    HTTP status, or an exception instance to raise.
+    An override may be a payload for the response's ``data`` key, a
+    ``RawBody`` with the whole response, an ``int`` HTTP status, or an
+    exception instance to raise.
     """
     for name, (method, path) in ENDPOINTS.items():
-        value = overrides.get(name, copy.deepcopy(DEFAULT_PAYLOADS[name]))
+        value = overrides.get(name, RawBody(load_body(name)))
         url = f"https://{host}{path}"
         register = getattr(aioclient_mock, method)
         if isinstance(value, BaseException):
             register(url, exc=value)
         elif isinstance(value, int):
             register(url, status=value)
+        elif isinstance(value, RawBody):
+            register(url, json=value.body)
         else:
             register(url, json={"Status": "2000", "data": value})
 
@@ -113,7 +108,7 @@ def mock_config_entry() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         title="Polycom Trio 8800",
-        unique_id=MAC.lower(),
+        unique_id=MAC,
         data={CONF_HOST: HOST, CONF_PASSWORD: PASSWORD, CONF_VERIFY_SSL: False},
     )
 

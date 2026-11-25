@@ -12,7 +12,7 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.poly.const import DOMAIN
 
-from .conftest import HOST, MAC, PASSWORD, mock_device
+from .conftest import HOST, MAC, PASSWORD, RawBody, load_data, mock_device
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -43,7 +43,7 @@ async def test_user_flow(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Polycom Trio 8800"
     assert result["data"] == USER_INPUT
-    assert result["result"].unique_id == MAC.lower()
+    assert result["result"].unique_id == MAC
 
 
 @pytest.mark.parametrize(
@@ -99,6 +99,22 @@ async def test_user_flow_unexpected_payload(
     assert result["errors"]["base"] in {"cannot_connect", "unknown"}
 
 
+async def test_user_flow_device_error_status(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """An error Status in an HTTP 200 reply isn't mistaken for success."""
+    mock_device(aioclient_mock, device_info=RawBody({"Status": "5000"}))
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unknown"}
+
+
 async def test_user_flow_already_configured(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
@@ -119,34 +135,29 @@ async def test_user_flow_already_configured(
     assert mock_config_entry.data[CONF_HOST] == "192.168.1.99"
 
 
-async def test_user_flow_mac_from_device_info(
+async def test_user_flow_does_not_need_network_info(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """If network info has no MAC, or isn't supported, device info's MAC is used."""
-    for network_info in ({"IPV4Address": HOST}, 404):
-        aioclient_mock.clear_requests()
-        mock_device(aioclient_mock, network_info=network_info)
+    """The MAC comes from device info; network info isn't requested at all."""
+    mock_device(aioclient_mock)
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_USER}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], USER_INPUT
-        )
-        assert result["type"] is FlowResultType.CREATE_ENTRY
-        assert result["result"].unique_id == MAC.lower()
-        await hass.config_entries.async_remove(result["result"].entry_id)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert not any("network/info" in str(c[1]) for c in aioclient_mock.mock_calls)
 
 
 async def test_user_flow_without_mac_dedupes_by_host(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     """A phone that reports no MAC still can't be added twice at one address."""
-    mock_device(
-        aioclient_mock,
-        network_info={},
-        device_info={"DeviceVendor": "Polycom", "ModelNumber": "Trio 8800"},
-    )
+    device_info = load_data("device_info")
+    del device_info["MACAddress"]
+    mock_device(aioclient_mock, device_info=device_info)
 
     for expected in (FlowResultType.CREATE_ENTRY, FlowResultType.ABORT):
         result = await hass.config_entries.flow.async_init(
@@ -218,8 +229,7 @@ async def test_reconfigure_flow_wrong_device(
     mock_device(
         aioclient_mock,
         host="192.168.1.77",
-        device_info={"MACAddress": "aabbccddeeff"},
-        network_info={"MACAddress": "aabbccddeeff"},
+        device_info={**load_data("device_info"), "MACAddress": "64167fabcdef"},
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_HOST: "192.168.1.77", CONF_VERIFY_SSL: False}

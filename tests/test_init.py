@@ -14,7 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.poly.const import DOMAIN
 
-from .conftest import PASSWORD, mock_device
+from .conftest import MAC, PASSWORD, RawBody, load_data, mock_device
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -53,15 +53,17 @@ async def test_requests_use_basic_auth(
         assert headers["Authorization"] == "Basic UG9seWNvbTpzZWNyZXQ="
 
 
-@pytest.mark.parametrize("error", [ClientError(), TimeoutError(), 500])
+@pytest.mark.parametrize(
+    "error", [ClientError(), TimeoutError(), 500, RawBody({"Status": "5000"})]
+)
 async def test_setup_retries_when_device_offline(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
-    error: Exception | int,
+    error: Exception | int | RawBody,
 ) -> None:
     """An unreachable device puts the entry in retry rather than failing it."""
-    mock_device(aioclient_mock, device_info=error, network_info=error)
+    mock_device(aioclient_mock, device_info=error)
     mock_config_entry.add_to_hass(hass)
 
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -76,7 +78,7 @@ async def test_setup_starts_reauth_on_bad_password(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """A rejected password fails setup and asks the user to reauthenticate."""
-    mock_device(aioclient_mock, device_info=401, network_info=401)
+    mock_device(aioclient_mock, device_info=401)
     mock_config_entry.add_to_hass(hass)
 
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -111,7 +113,7 @@ async def _setup_two_devices(
         mock_device(
             aioclient_mock,
             host=host,
-            device_info={"DeviceVendor": "Polycom", "MACAddress": mac},
+            device_info={**load_data("device_info"), "MACAddress": mac},
         )
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -184,6 +186,45 @@ async def test_reboot_service_reports_device_errors(
         await hass.services.async_call(DOMAIN, "reboot", {}, blocking=True)
 
 
+async def test_backfills_unique_id_for_older_entries(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Entries from the old config flow have no unique ID; setup adds the MAC."""
+    mock_device(aioclient_mock)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.50", CONF_PASSWORD: PASSWORD},
+    )
+    entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.unique_id == MAC
+
+
+async def test_backfill_leaves_duplicate_entries_alone(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A second entry for an already-identified phone isn't given its MAC too."""
+    mock_device(aioclient_mock)
+    mock_config_entry.add_to_hass(hass)
+    duplicate = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "192.168.1.50", CONF_PASSWORD: PASSWORD},
+    )
+    duplicate.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(duplicate.entry_id)
+    await hass.async_block_till_done()
+
+    assert duplicate.state is ConfigEntryState.LOADED
+    assert duplicate.unique_id is None
+
+
 @pytest.mark.parametrize(
     ("domain", "service", "key", "endpoint"),
     [
@@ -204,10 +245,11 @@ async def test_entity_actions_report_device_errors(
     entity_id = er.async_get(hass).async_get_entity_id(
         domain, DOMAIN, f"{init_integration.entry_id}_{key}"
     )
-    aioclient_mock.clear_requests()
-    mock_device(aioclient_mock, **{endpoint: ClientError()})
+    for failure in (ClientError(), RawBody({"Status": "4007"})):
+        aioclient_mock.clear_requests()
+        mock_device(aioclient_mock, **{endpoint: failure})
 
-    with pytest.raises(HomeAssistantError):
-        await hass.services.async_call(
-            domain, service, {"entity_id": entity_id}, blocking=True
-        )
+        with pytest.raises(HomeAssistantError, match="did not accept the command"):
+            await hass.services.async_call(
+                domain, service, {"entity_id": entity_id}, blocking=True
+            )

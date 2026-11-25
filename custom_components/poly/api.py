@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
 REQUEST_TIMEOUT = 10
+API_STATUS_OK = "2000"
 
 
 class PolycomApiClientError(Exception):
@@ -38,6 +39,33 @@ def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
         msg = "Invalid credentials"
         raise PolycomApiClientAuthenticationError(msg)
     response.raise_for_status()
+
+
+def _verify_status_or_raise(body: Any) -> None:
+    """
+    Raise if the device reports a failure inside an HTTP 200 reply.
+
+    Poly phones answer most requests with HTTP 200 and put the outcome in a
+    "Status" field: "2000" is success, 4xxx/5xxx are errors (for example
+    callStatus returns "4007" when no call is active).
+    """
+    if isinstance(body, dict) and (status := body.get("Status")) not in (
+        None,
+        API_STATUS_OK,
+    ):
+        msg = f"Device returned status {status}"
+        raise PolycomApiClientError(msg)
+
+
+def device_mac_address(device_info: dict[str, Any]) -> str | None:
+    """
+    Return the phone's MAC address as used for unique IDs and devices.
+
+    Only device info carries it (as 12 lowercase hex digits on a Trio 8800);
+    network info doesn't include it.
+    """
+    mac_address = device_info.get("MACAddress")
+    return str(mac_address).lower() if mac_address else None
 
 
 class PolycomApiClient:
@@ -73,14 +101,6 @@ class PolycomApiClient:
         )
         return response.get("data", {})
 
-    async def async_get_network_info(self) -> dict[str, Any]:
-        """Get network information including MAC address."""
-        response = await self._api_wrapper(
-            method="get",
-            url=f"{self._base_url}/mgmt/network/info",
-        )
-        return response.get("data", {})
-
     async def async_get_call_status(self) -> dict[str, Any]:
         """Get current call status."""
         response = await self._api_wrapper(
@@ -90,8 +110,8 @@ class PolycomApiClient:
         # This endpoint may return an error status when no call is active
         return response.get("data", {})
 
-    async def async_get_session_stats(self) -> dict[str, Any]:
-        """Get session statistics."""
+    async def async_get_session_stats(self) -> Any:
+        """Get media session statistics (an empty list while idle)."""
         response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/mgmt/media/sessionStats",
@@ -190,7 +210,9 @@ class PolycomApiClient:
                 ) as response,
             ):
                 _verify_response_or_raise(response)
-                return await response.json()
+                body = await response.json()
+                _verify_status_or_raise(body)
+                return body
 
         except PolycomApiClientError:
             # Let our own errors (e.g. bad credentials) through unwrapped
