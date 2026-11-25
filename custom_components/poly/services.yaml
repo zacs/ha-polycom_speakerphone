@@ -1,3 +1,7 @@
 reboot:
-  name: Reboot
-  description: Reboot the Polycom speakerphone.
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: poly

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,83 +12,220 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfInformation
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation
+from homeassistant.core import callback
+from homeassistant.util import dt as dt_util
 
 from .entity import PolycomEntity
 
-from homeassistant.util import dt as dt_util
-
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+    from homeassistant.helpers.typing import StateType
 
     from .coordinator import PolycomDataUpdateCoordinator
     from .data import PolycomConfigEntry
 
-ENTITY_DESCRIPTIONS = (
-    SensorEntityDescription(
+# Coordinator-driven entities; the coordinator serializes device access
+PARALLEL_UPDATES = 0
+
+# The computed boot time drifts by a second or two between polls because
+# uptime is reported in whole seconds; ignore changes smaller than this.
+UPTIME_TOLERANCE = timedelta(minutes=1)
+
+
+def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return a dict-valued section of the coordinator data, or an empty dict."""
+    value = data.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _state_data(data: dict[str, Any]) -> str:
+    """Return the free-form StateData text from pollForStatus."""
+    state_data = _section(data, "poll_status").get("StateData")
+    return state_data if isinstance(state_data, str) else ""
+
+
+def _phone_state(data: dict[str, Any]) -> str:
+    """Prefer pollForStatus for real-time state; fall back to callStatus."""
+    if state := _section(data, "poll_status").get("State"):
+        return state
+    return _section(data, "call_status").get("State", "Idle")
+
+
+def _last_call_time(data: dict[str, Any]) -> datetime | None:
+    """Parse 'Time of last call 2025-08-03T10:35:57' from StateData."""
+    state_data = _state_data(data)
+    if "Time of last call" not in state_data:
+        return None
+    try:
+        last_call = datetime.fromisoformat(
+            state_data.split("Time of last call ")[-1].strip()
+        )
+    except ValueError:
+        return None
+    # The phone reports its local time without an offset
+    if last_call.tzinfo is None:
+        last_call = last_call.replace(tzinfo=dt_util.get_default_time_zone())
+    return last_call
+
+
+def _call_duration(data: dict[str, Any]) -> str | None:
+    """Return StateData while it describes a call duration."""
+    state_data = _state_data(data)
+    return state_data if "duration" in state_data.lower() else None
+
+
+def _phone_error(data: dict[str, Any]) -> str | None:
+    """Return StateData while it describes an error."""
+    state_data = _state_data(data).lower()
+    if "error" in state_data or "fail" in state_data:
+        return _state_data(data)
+    return None
+
+
+def _cpu_usage(data: dict[str, Any]) -> float | None:
+    """Return current CPU utilization."""
+    cpu = _section(_section(data, "device_stats"), "CPU")
+    if current := cpu.get("Current"):
+        try:
+            return float(current)
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _memory(data: dict[str, Any]) -> dict[str, Any]:
+    """Return the memory section of the device stats."""
+    return _section(_section(data, "device_stats"), "Memory")
+
+
+def _memory_usage(data: dict[str, Any]) -> float | None:
+    """Return used memory as a percentage of total."""
+    memory = _memory(data)
+    try:
+        total = int(memory.get("Total", 0))
+        used = int(memory.get("Used", 0))
+    except (ValueError, TypeError):
+        return None
+    if total > 0:
+        return round((used / total) * 100, 1)
+    return None
+
+
+def _memory_total(data: dict[str, Any]) -> float | None:
+    """Return total memory, converted from bytes to MiB."""
+    try:
+        total = int(_memory(data).get("Total", 0))
+    except (ValueError, TypeError):
+        return None
+    return round(total / (1024 * 1024), 1)
+
+
+def _sip_connection(data: dict[str, Any]) -> str:
+    """Return whether the first line's call server is working."""
+    line_info = data.get("line_info")
+    if isinstance(line_info, list) and line_info and isinstance(line_info[0], dict):
+        call_servers = line_info[0].get("CallServers")
+        if (
+            isinstance(call_servers, list)
+            and call_servers
+            and isinstance(call_servers[0], dict)
+        ):
+            working = call_servers[0].get("Working", "False")
+            return "Connected" if working == "True" else "Disconnected"
+    return "Unknown"
+
+
+def _boot_time(data: dict[str, Any]) -> datetime | None:
+    """Return when the device last started, from its reported uptime."""
+    uptime = _section(_section(data, "device_info"), "UpTime")
+    try:
+        total_seconds = (
+            int(uptime.get("Days", 0)) * 86400
+            + int(uptime.get("Hours", 0)) * 3600
+            + int(uptime.get("Minutes", 0)) * 60
+            + int(uptime.get("Seconds", 0))
+        )
+    except (ValueError, TypeError):
+        return None
+    if total_seconds <= 0:
+        return None
+    return (dt_util.now() - timedelta(seconds=total_seconds)).replace(microsecond=0)
+
+
+@dataclass(frozen=True, kw_only=True)
+class PolycomSensorEntityDescription(SensorEntityDescription):
+    """Describes a Polycom sensor."""
+
+    value_fn: Callable[[dict[str, Any]], StateType | datetime]
+
+
+ENTITY_DESCRIPTIONS: tuple[PolycomSensorEntityDescription, ...] = (
+    PolycomSensorEntityDescription(
         key="phone_state",
-        name="Phone State",
-        icon="mdi:phone",
+        translation_key="phone_state",
+        value_fn=_phone_state,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="last_call_time",
-        name="Last Call Time",
-        icon="mdi:clock-outline",
+        translation_key="last_call_time",
         device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=_last_call_time,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="call_duration",
-        name="Call Duration",
-        icon="mdi:timer-outline",
+        translation_key="call_duration",
+        value_fn=_call_duration,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="phone_error",
-        name="Phone Error",
-        icon="mdi:alert-circle",
+        translation_key="phone_error",
+        value_fn=_phone_error,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="cpu_usage",
-        name="CPU Usage",
-        icon="mdi:cpu-64-bit",
+        translation_key="cpu_usage",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_cpu_usage,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="memory_usage",
-        name="Memory Usage",
-        icon="mdi:memory",
+        translation_key="memory_usage",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_memory_usage,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="memory_total",
-        name="Memory Total",
-        icon="mdi:memory",
-        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        translation_key="memory_total",
+        native_unit_of_measurement=UnitOfInformation.MEBIBYTES,
         device_class=SensorDeviceClass.DATA_SIZE,
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_memory_total,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="last_called_number",
-        name="Last Called Number",
-        icon="mdi:phone-outgoing",
+        translation_key="last_called_number",
+        value_fn=lambda data: _section(data, "session_stats").get("LastCalledNumber"),
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="sip_connection",
-        name="SIP Connection",
-        icon="mdi:lan-connect",
+        translation_key="sip_connection",
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_sip_connection,
     ),
-    SensorEntityDescription(
+    PolycomSensorEntityDescription(
         key="uptime",
-        name="Uptime",
-        icon="mdi:clock-outline",
+        translation_key="uptime",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_boot_time,
     ),
 )
 
@@ -95,161 +233,62 @@ ENTITY_DESCRIPTIONS = (
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
     entry: PolycomConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        PolycomSensor(
-            coordinator=entry.runtime_data.coordinator,
-            entity_description=entity_description,
+        (PolycomUptimeSensor if description.key == "uptime" else PolycomSensor)(
+            coordinator=coordinator,
+            entity_description=description,
         )
-        for entity_description in ENTITY_DESCRIPTIONS
+        for description in ENTITY_DESCRIPTIONS
     )
 
 
 class PolycomSensor(PolycomEntity, SensorEntity):
     """polycom_speakerphone Sensor class."""
 
+    entity_description: PolycomSensorEntityDescription
+
+    @property
+    def native_value(self) -> StateType | datetime:
+        """Return the native value of the sensor."""
+        return self.entity_description.value_fn(self.coordinator.data)
+
+
+class PolycomUptimeSensor(PolycomSensor):
+    """Boot time sensor that ignores sub-minute drift between polls."""
+
     def __init__(
         self,
         coordinator: PolycomDataUpdateCoordinator,
-        entity_description: SensorEntityDescription,
+        entity_description: PolycomSensorEntityDescription,
     ) -> None:
-        """Initialize the sensor class."""
-        super().__init__(coordinator)
-        self.entity_description = entity_description
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{entity_description.key}"
+        """Initialize the sensor with the boot time from the first poll."""
+        super().__init__(coordinator, entity_description)
+        self._boot_time = self._fetch_boot_time()
+
+    def _fetch_boot_time(self) -> datetime | None:
+        """Compute the boot time from the latest coordinator data."""
+        value = self.entity_description.value_fn(self.coordinator.data)
+        return value if isinstance(value, datetime) else None
 
     @property
-    def native_value(self) -> str | int | float | datetime | None:
-        """Return the native value of the sensor."""
-        data = self.coordinator.data
-        key = self.entity_description.key
-        
-        if key == "phone_state":
-            # Use pollForStatus for real-time phone state
-            poll_status = data.get("poll_status", {})
-            if isinstance(poll_status, dict):
-                state = poll_status.get("State")
-                if state:
-                    return state
-            # Fallback to old call_status endpoint
-            call_status = data.get("call_status", {})
-            if isinstance(call_status, dict):
-                return call_status.get("State", "Idle")
-            return "Idle"
-        
-        if key == "last_call_time":
-            poll_status = data.get("poll_status", {})
-            if isinstance(poll_status, dict):
-                state_data = poll_status.get("StateData", "")
-                # Parse "Time of last call 2025-08-03T10:35:57"
-                if state_data and "Time of last call" in state_data:
-                    try:
-                        timestamp_str = state_data.split("Time of last call ")[-1].strip()
-                        # Parse ISO format timestamp and make timezone-aware using HA's timezone
-                        dt = datetime.fromisoformat(timestamp_str)
-                        # If no timezone info, assume it's in Home Assistant's configured timezone
-                        if dt.tzinfo is None:
-                            dt = dt_util.as_local(dt)
-                        return dt
-                    except (ValueError, IndexError):
-                        pass
-            return None
-        
-        if key == "call_duration":
-            poll_status = data.get("poll_status", {})
-            if isinstance(poll_status, dict):
-                state_data = poll_status.get("StateData", "")
-                # Parse duration if available (format TBD based on active call)
-                if state_data and "duration" in state_data.lower():
-                    return state_data
-            return None
-        
-        if key == "phone_error":
-            poll_status = data.get("poll_status", {})
-            if isinstance(poll_status, dict):
-                state_data = poll_status.get("StateData", "")
-                # Check if StateData contains error information
-                if state_data and ("error" in state_data.lower() or "fail" in state_data.lower()):
-                    return state_data
-            return None
-        
-        if key == "cpu_usage":
-            device_stats = data.get("device_stats", {})
-            if isinstance(device_stats, dict):
-                cpu = device_stats.get("CPU", {})
-                if isinstance(cpu, dict):
-                    current = cpu.get("Current")
-                    if current:
-                        try:
-                            return float(current)
-                        except (ValueError, TypeError):
-                            pass
-            return None
-        
-        if key == "memory_usage":
-            device_stats = data.get("device_stats", {})
-            if isinstance(device_stats, dict):
-                memory = device_stats.get("Memory", {})
-                if isinstance(memory, dict):
-                    try:
-                        total = int(memory.get("Total", 0))
-                        used = int(memory.get("Used", 0))
-                        if total > 0:
-                            return round((used / total) * 100, 1)
-                    except (ValueError, TypeError):
-                        pass
-            return None
-        
-        if key == "memory_total":
-            device_stats = data.get("device_stats", {})
-            if isinstance(device_stats, dict):
-                memory = device_stats.get("Memory", {})
-                if isinstance(memory, dict):
-                    try:
-                        total = int(memory.get("Total", 0))
-                        # Convert bytes to MB
-                        return round(total / (1024 * 1024), 1)
-                    except (ValueError, TypeError):
-                        pass
-            return None
-        
-        if key == "last_called_number":
-            session_stats = data.get("session_stats", {})
-            if isinstance(session_stats, dict):
-                return session_stats.get("LastCalledNumber")
-            return None
-        
-        if key == "sip_connection":
-            line_info = data.get("line_info", [])
-            if isinstance(line_info, list) and len(line_info) > 0:
-                call_servers = line_info[0].get("CallServers", [])
-                if isinstance(call_servers, list) and len(call_servers) > 0:
-                    working = call_servers[0].get("Working", "False")
-                    return "Connected" if working == "True" else "Disconnected"
-            return "Unknown"
-        
-        if key == "uptime":
-            device_info = data.get("device_info", {})
-            if isinstance(device_info, dict):
-                uptime_data = device_info.get("UpTime", {})
-                if isinstance(uptime_data, dict):
-                    try:
-                        # Convert uptime components to total seconds
-                        days = int(uptime_data.get("Days", 0))
-                        hours = int(uptime_data.get("Hours", 0))
-                        minutes = int(uptime_data.get("Minutes", 0))
-                        seconds = int(uptime_data.get("Seconds", 0))
-                        
-                        total_seconds = (days * 86400) + (hours * 3600) + (minutes * 60) + seconds
-                        
-                        # Calculate device start time by subtracting uptime from now
-                        if total_seconds > 0:
-                            now = dt_util.now()
-                            return (now - timedelta(seconds=total_seconds)).replace(microsecond=0)
-                    except (ValueError, TypeError):
-                        pass
-            return None
-        
-        return None
+    def native_value(self) -> datetime | None:
+        """Return the device boot time."""
+        return self._boot_time
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Only move the boot time when it changed meaningfully (a reboot)."""
+        # After a failed poll the data is stale, so the computed time would drift
+        if self.coordinator.last_update_success:
+            new = self._fetch_boot_time()
+            if (
+                new is None
+                or self._boot_time is None
+                or abs(new - self._boot_time) > UPTIME_TOLERANCE
+            ):
+                self._boot_time = new
+        super()._handle_coordinator_update()

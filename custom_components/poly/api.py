@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import socket
-from typing import Any
+from http import HTTPStatus
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
-import async_timeout
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+REQUEST_TIMEOUT = 10
 
 
 class PolycomApiClientError(Exception):
@@ -27,11 +34,9 @@ class PolycomApiClientAuthenticationError(
 
 def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
     """Verify that the response is valid."""
-    if response.status in (401, 403):
+    if response.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
         msg = "Invalid credentials"
-        raise PolycomApiClientAuthenticationError(
-            msg,
-        )
+        raise PolycomApiClientAuthenticationError(msg)
     response.raise_for_status()
 
 
@@ -44,16 +49,21 @@ class PolycomApiClient:
         username: str,
         password: str,
         session: aiohttp.ClientSession,
+        *,
         verify_ssl: bool = False,
     ) -> None:
         """Initialize Polycom API Client."""
         self._host = host
-        self._username = username
-        self._password = password
         self._session = session
         self._verify_ssl = verify_ssl
         self._base_url = f"https://{host}/api/v1"
-        self._auth = aiohttp.BasicAuth(username, password)
+        # Built by hand: aiohttp.BasicAuth is deprecated in newer aiohttp, and
+        # its replacement doesn't exist in the versions older HA releases ship
+        credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+        self._headers = {
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/json",
+        }
 
     async def async_get_device_info(self) -> dict[str, Any]:
         """Get device information."""
@@ -88,7 +98,7 @@ class PolycomApiClient:
         )
         return response.get("data", {})
 
-    async def async_get_line_info(self) -> dict[str, Any]:
+    async def async_get_line_info(self) -> list[dict[str, Any]]:
         """Get line registration information."""
         response = await self._api_wrapper(
             method="get",
@@ -111,7 +121,7 @@ class PolycomApiClient:
             url=f"{self._base_url}/mgmt/pollForStatus",
         )
         return response.get("data", {})
-    
+
     async def async_get_communication_info(self) -> dict[str, Any]:
         """Get communication information including mute state."""
         response = await self._api_wrapper(
@@ -120,106 +130,77 @@ class PolycomApiClient:
         )
         return response.get("data", {})
 
-    async def async_set_mute(self, mute: bool) -> dict[str, Any]:
+    async def async_set_mute(self, *, mute: bool) -> dict[str, Any]:
         """Set the mute state of the phone."""
         return await self._api_wrapper(
             method="post",
             url=f"{self._base_url}/callctrl/mute",
             data={"data": {"state": "1" if mute else "0"}},
         )
-    
+
     async def async_reboot(self) -> dict[str, Any]:
-        """Reboot the device."""
+        """Reboot the device once any active call has ended."""
         return await self._api_wrapper(
             method="post",
             url=f"{self._base_url}/mgmt/safeReboot",
         )
 
     async def async_get_all_data(self) -> dict[str, Any]:
-        """Get all device data at once."""
-        device_info = await self.async_get_device_info()
-        network_info = await self.async_get_network_info()
-        
-        # Use pollForStatus for fast polling of call state
-        try:
-            poll_status = await self.async_poll_for_status()
-        except Exception:  # noqa: BLE001
-            poll_status = {}
-        
-        # Try to get other data, but don't fail if endpoints don't exist
-        try:
-            call_status = await self.async_get_call_status()
-        except Exception:  # noqa: BLE001
-            call_status = {}
-        
-        try:
-            device_stats = await self.async_get_device_stats()
-        except Exception:  # noqa: BLE001
-            device_stats = {}
-        
-        try:
-            line_info = await self.async_get_line_info()
-        except Exception:  # noqa: BLE001
-            line_info = {}
-        
-        try:
-            session_stats = await self.async_get_session_stats()
-        except Exception:  # noqa: BLE001
-            session_stats = {}
-        
-        try:
-            communication_info = await self.async_get_communication_info()
-        except Exception:  # noqa: BLE001
-            communication_info = {}
+        """
+        Get all polled device data.
 
-        return {
-            "device_info": device_info,
-            "network_info": network_info,
-            "poll_status": poll_status,
-            "call_status": call_status,
-            "device_stats": device_stats,
-            "line_info": line_info,
-            "session_stats": session_stats,
-            "communication_info": communication_info,
+        Device info is required; every other endpoint is optional because
+        firmware versions differ in which ones they support.
+        """
+        device_info = await self.async_get_device_info()
+
+        # Fetched one at a time to avoid overwhelming the phone's web server
+        optional: dict[str, Callable[[], Awaitable[Any]]] = {
+            "poll_status": self.async_poll_for_status,
+            "call_status": self.async_get_call_status,
+            "device_stats": self.async_get_device_stats,
+            "line_info": self.async_get_line_info,
+            "session_stats": self.async_get_session_stats,
+            "communication_info": self.async_get_communication_info,
         }
+        data: dict[str, Any] = {"device_info": device_info}
+        for key, fetch in optional.items():
+            try:
+                data[key] = await fetch()
+            except PolycomApiClientError:
+                data[key] = [] if key == "line_info" else {}
+        return data
 
     async def _api_wrapper(
         self,
         method: str,
         url: str,
         data: dict | None = None,
-        headers: dict | None = None,
     ) -> Any:
-        """Get information from the API."""
-        if headers is None:
-            headers = {}
-        headers["Content-Type"] = "application/json"
-        
+        """Make a request to the device and return the decoded JSON body."""
         try:
-            async with async_timeout.timeout(10):
-                response = await self._session.request(
+            async with (
+                asyncio.timeout(REQUEST_TIMEOUT),
+                self._session.request(
                     method=method,
                     url=url,
-                    headers=headers,
+                    headers=self._headers,
                     json=data,
-                    auth=self._auth,
                     ssl=self._verify_ssl,
-                )
+                ) as response,
+            ):
                 _verify_response_or_raise(response)
                 return await response.json()
 
+        except PolycomApiClientError:
+            # Let our own errors (e.g. bad credentials) through unwrapped
+            raise
         except TimeoutError as exception:
             msg = f"Timeout error fetching information - {exception}"
-            raise PolycomApiClientCommunicationError(
-                msg,
-            ) from exception
+            raise PolycomApiClientCommunicationError(msg) from exception
         except (aiohttp.ClientError, socket.gaierror) as exception:
             msg = f"Error fetching information - {exception}"
-            raise PolycomApiClientCommunicationError(
-                msg,
-            ) from exception
-        except Exception as exception:  # pylint: disable=broad-except
-            msg = f"Something really wrong happened! - {exception}"
-            raise PolycomApiClientError(
-                msg,
-            ) from exception
+            raise PolycomApiClientCommunicationError(msg) from exception
+        except ValueError as exception:
+            msg = f"Unexpected response from device - {exception}"
+            raise PolycomApiClientError(msg) from exception

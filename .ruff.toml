@@ -12,7 +12,16 @@ ignore = [
     "D203", # no-blank-line-before-class (incompatible with formatter)
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
+    "CPY001", # missing-copyright-notice (licensed via the LICENSE file)
     "ISC001", # incompatible with formatter
+]
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "ARG001", # fixtures are often requested only for their side effects
+    "PLR0913", # pytest parametrization and fixtures need many arguments
+    "PLR0917", # pytest parametrization and fixtures need many arguments
+    "S101", # pytest uses assert
 ]
 
 [lint.flake8-pytest-style]

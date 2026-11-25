@@ -1,28 +1,144 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "description": "Enter the IP address and password for your Polycom Trio 8800 speakerphone.",
-                "data": {
-                    "host": "IP Address",
-                    "password": "Password",
-                    "verify_ssl": "Verify SSL Certificate"
-                }
-            }
+  "config": {
+    "step": {
+      "user": {
+        "description": "Enter the IP address and password for your Polycom Trio 8800 speakerphone.",
+        "data": {
+          "host": "IP address",
+          "password": "Password",
+          "verify_ssl": "Verify SSL certificate"
         },
-        "error": {
-            "auth": "Authentication failed.",
-            "connection": "Unable to connect to the Polycom device. Please check the IP address and network connection.",
-            "unknown": "Unknown error occurred."
-        },
-        "abort": {
-            "already_configured": "This device is already configured."
+        "data_description": {
+          "host": "The IP address or hostname of the speakerphone.",
+          "password": "The admin password of the speakerphone's web interface.",
+          "verify_ssl": "Leave off unless the phone has a certificate your Home Assistant trusts; phones ship with a self-signed one."
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate speakerphone",
+        "description": "The speakerphone at {host} rejected the stored password. Enter its current admin password.",
+        "data": {
+          "password": "Password"
+        },
+        "data_description": {
+          "password": "The admin password of the speakerphone's web interface."
+        }
+      },
+      "reconfigure": {
+        "description": "Update the connection settings for this speakerphone.",
+        "data": {
+          "host": "IP address",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "host": "The IP address or hostname of the speakerphone.",
+          "verify_ssl": "Leave off unless the phone has a certificate your Home Assistant trusts; phones ship with a self-signed one."
+        }
+      }
     },
-    "services": {
-        "reboot": {
-            "name": "Reboot",
-            "description": "Reboot the Polycom speakerphone."
-        }
+    "error": {
+      "invalid_auth": "Authentication failed. Check the admin password.",
+      "cannot_connect": "Unable to connect to the Polycom device. Please check the IP address, the network connection, and that the REST API is enabled.",
+      "unknown": "Unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "reauth_successful": "Reauthentication was successful.",
+      "reconfigure_successful": "Reconfiguration was successful.",
+      "wrong_device": "The device at that address is a different speakerphone."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "dnd_status": {
+        "name": "Do not disturb"
+      },
+      "mute_status": {
+        "name": "Muted"
+      },
+      "line_registered": {
+        "name": "Line registered"
+      },
+      "line_active": {
+        "name": "Line active"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Reboot"
+      }
+    },
+    "sensor": {
+      "phone_state": {
+        "name": "Phone state"
+      },
+      "last_call_time": {
+        "name": "Last call time"
+      },
+      "call_duration": {
+        "name": "Call duration"
+      },
+      "phone_error": {
+        "name": "Phone error"
+      },
+      "cpu_usage": {
+        "name": "CPU usage"
+      },
+      "memory_usage": {
+        "name": "Memory usage"
+      },
+      "memory_total": {
+        "name": "Memory total"
+      },
+      "last_called_number": {
+        "name": "Last called number"
+      },
+      "sip_connection": {
+        "name": "SIP connection"
+      },
+      "uptime": {
+        "name": "Uptime"
+      }
+    },
+    "switch": {
+      "mute": {
+        "name": "Mute"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_auth": {
+      "message": "The speakerphone rejected the stored password."
+    },
+    "update_failed": {
+      "message": "Error communicating with the speakerphone: {error}"
+    },
+    "action_failed": {
+      "message": "The speakerphone did not accept the command: {error}"
+    },
+    "reboot_failed": {
+      "message": "The speakerphone did not accept the reboot request: {error}"
+    },
+    "config_entry_required": {
+      "message": "More than one speakerphone is set up; choose which one to reboot."
+    },
+    "config_entry_not_found": {
+      "message": "No Polycom speakerphone is set up with the ID {entry_id}."
+    },
+    "config_entry_not_loaded": {
+      "message": "The speakerphone {title} is not loaded."
+    }
+  },
+  "services": {
+    "reboot": {
+      "name": "Reboot",
+      "description": "Reboot a Polycom speakerphone once any active call has ended.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Speakerphone",
+          "description": "The speakerphone to reboot. Optional when only one is set up."
+        }
+      }
+    }
+  }
 }

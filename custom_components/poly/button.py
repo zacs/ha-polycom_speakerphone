@@ -2,30 +2,48 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.button import (
     ButtonDeviceClass,
     ButtonEntity,
     ButtonEntityDescription,
 )
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.const import EntityCategory
+from homeassistant.exceptions import HomeAssistantError
 
+from .api import PolycomApiClientError
+from .const import DOMAIN
 from .entity import PolycomEntity
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from collections.abc import Awaitable, Callable
 
-    from .coordinator import PolycomDataUpdateCoordinator
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+    from .api import PolycomApiClient
     from .data import PolycomConfigEntry
 
-ENTITY_DESCRIPTIONS = (
-    ButtonEntityDescription(
+# Send one command to the phone at a time
+PARALLEL_UPDATES = 1
+
+
+@dataclass(frozen=True, kw_only=True)
+class PolycomButtonEntityDescription(ButtonEntityDescription):
+    """Describes a Polycom button."""
+
+    press_fn: Callable[[PolycomApiClient], Awaitable[Any]]
+
+
+ENTITY_DESCRIPTIONS: tuple[PolycomButtonEntityDescription, ...] = (
+    PolycomButtonEntityDescription(
         key="reboot",
-        name="Reboot",
+        translation_key="reboot",
         device_class=ButtonDeviceClass.RESTART,
         entity_category=EntityCategory.DIAGNOSTIC,
+        press_fn=lambda client: client.async_reboot(),
     ),
 )
 
@@ -33,7 +51,7 @@ ENTITY_DESCRIPTIONS = (
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
     entry: PolycomConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the button platform."""
     async_add_entities(
@@ -48,20 +66,15 @@ async def async_setup_entry(
 class PolycomButton(PolycomEntity, ButtonEntity):
     """polycom_speakerphone Button class."""
 
-    def __init__(
-        self,
-        coordinator: PolycomDataUpdateCoordinator,
-        entity_description: ButtonEntityDescription,
-    ) -> None:
-        """Initialize the button class."""
-        super().__init__(coordinator)
-        self.entity_description = entity_description
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{entity_description.key}"
+    entity_description: PolycomButtonEntityDescription
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        key = self.entity_description.key
-        
-        if key == "reboot":
-            client = self.coordinator.config_entry.runtime_data.client
-            await client.async_reboot()
+        try:
+            await self.entity_description.press_fn(self.coordinator.client)
+        except PolycomApiClientError as exception:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="action_failed",
+                translation_placeholders={"error": str(exception)},
+            ) from exception

@@ -2,43 +2,81 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
 
-from .entity import PolycomEntity
+from .entity import PolycomEntity, phone_muted
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from collections.abc import Callable
 
-    from .coordinator import PolycomDataUpdateCoordinator
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
     from .data import PolycomConfigEntry
 
-ENTITY_DESCRIPTIONS = (
-    BinarySensorEntityDescription(
+# Coordinator-driven entities; the coordinator serializes device access
+PARALLEL_UPDATES = 0
+
+
+def _first_line(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the first line from lineInfo, if the phone reported one."""
+    line_info = data.get("line_info")
+    if isinstance(line_info, list) and line_info and isinstance(line_info[0], dict):
+        return line_info[0]
+    return None
+
+
+def _line_flag(field: str) -> Callable[[dict[str, Any]], bool | None]:
+    """Build a value function for a "True"/"False" field on the first line."""
+
+    def value_fn(data: dict[str, Any]) -> bool | None:
+        if (line := _first_line(data)) is None:
+            return None
+        return line.get(field, "False") == "True"
+
+    return value_fn
+
+
+def _line_registered(data: dict[str, Any]) -> bool | None:
+    """Return whether the first line is registered with its SIP server."""
+    if (line := _first_line(data)) is None:
+        return None
+    return str(line.get("RegistrationStatus", "")).lower() == "registered"
+
+
+@dataclass(frozen=True, kw_only=True)
+class PolycomBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes a Polycom binary sensor."""
+
+    is_on_fn: Callable[[dict[str, Any]], bool | None]
+
+
+ENTITY_DESCRIPTIONS: tuple[PolycomBinarySensorEntityDescription, ...] = (
+    PolycomBinarySensorEntityDescription(
         key="dnd_status",
-        name="Do Not Disturb",
-        icon="mdi:phone-off",
+        translation_key="dnd_status",
+        is_on_fn=_line_flag("DoNotDisturb"),
     ),
-    BinarySensorEntityDescription(
+    PolycomBinarySensorEntityDescription(
         key="mute_status",
-        name="Muted",
-        icon="mdi:microphone-off",
+        translation_key="mute_status",
+        is_on_fn=phone_muted,
     ),
-    BinarySensorEntityDescription(
+    PolycomBinarySensorEntityDescription(
         key="line_registered",
-        name="Line Registered",
-        icon="mdi:phone-check",
+        translation_key="line_registered",
+        is_on_fn=_line_registered,
     ),
-    BinarySensorEntityDescription(
+    PolycomBinarySensorEntityDescription(
         key="line_active",
-        name="Line Active",
-        icon="mdi:phone-check",
+        translation_key="line_active",
+        is_on_fn=_line_flag("Active"),
     ),
 )
 
@@ -46,7 +84,7 @@ ENTITY_DESCRIPTIONS = (
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001 Unused function argument: `hass`
     entry: PolycomConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the binary sensor platform."""
     async_add_entities(
@@ -61,48 +99,9 @@ async def async_setup_entry(
 class PolycomBinarySensor(PolycomEntity, BinarySensorEntity):
     """polycom_speakerphone Binary Sensor class."""
 
-    def __init__(
-        self,
-        coordinator: PolycomDataUpdateCoordinator,
-        entity_description: BinarySensorEntityDescription,
-    ) -> None:
-        """Initialize the binary sensor class."""
-        super().__init__(coordinator)
-        self.entity_description = entity_description
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{entity_description.key}"
+    entity_description: PolycomBinarySensorEntityDescription
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
-        data = self.coordinator.data
-        key = self.entity_description.key
-        
-        if key == "dnd_status":
-            line_info = data.get("line_info", [])
-            if isinstance(line_info, list) and len(line_info) > 0:
-                dnd = line_info[0].get("DoNotDisturb", "False")
-                return dnd == "True"
-            return None
-        
-        if key == "mute_status":
-            communication_info = data.get("communication_info", {})
-            if isinstance(communication_info, dict):
-                mute_state = communication_info.get("PhoneMuteState", "False")
-                return mute_state == "True"
-            return None
-        
-        if key == "line_registered":
-            line_info = data.get("line_info", [])
-            if isinstance(line_info, list) and len(line_info) > 0:
-                reg_status = line_info[0].get("RegistrationStatus", "")
-                return reg_status.lower() == "registered"
-            return None
-        
-        if key == "line_active":
-            line_info = data.get("line_info", [])
-            if isinstance(line_info, list) and len(line_info) > 0:
-                active = line_info[0].get("Active", "False")
-                return active == "True"
-            return None
-        
-        return None
+        return self.entity_description.is_on_fn(self.coordinator.data)

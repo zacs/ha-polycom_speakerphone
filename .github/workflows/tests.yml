@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+permissions: {}
+
+jobs:
+  pytest:
+    name: "Pytest (HA ${{ matrix.ha }})"
+    runs-on: "ubuntu-latest"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest release this integration supports; keep in sync with hacs.json
+          - ha: "2025.2.4"
+            python-version: "3.13"
+            requirements: "pytest-homeassistant-custom-component==0.13.214"
+          # The newest release the test harness supports; updated by Dependabot
+          - ha: "latest"
+            python-version: "3.14"
+            requirements: "-r requirements_test.txt"
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: "requirements_test.txt"
+
+      - name: Install requirements
+        run: python3 -m pip install ${{ matrix.requirements }}
+
+      - name: Run tests
+        run: python3 -m pytest

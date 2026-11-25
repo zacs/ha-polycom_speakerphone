@@ -1,0 +1,60 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "dnd_status": {
+        "default": "mdi:phone-off"
+      },
+      "mute_status": {
+        "default": "mdi:microphone-off"
+      },
+      "line_registered": {
+        "default": "mdi:phone-check"
+      },
+      "line_active": {
+        "default": "mdi:phone-check"
+      }
+    },
+    "sensor": {
+      "phone_state": {
+        "default": "mdi:phone"
+      },
+      "last_call_time": {
+        "default": "mdi:clock-outline"
+      },
+      "call_duration": {
+        "default": "mdi:timer-outline"
+      },
+      "phone_error": {
+        "default": "mdi:alert-circle"
+      },
+      "cpu_usage": {
+        "default": "mdi:cpu-64-bit"
+      },
+      "memory_usage": {
+        "default": "mdi:memory"
+      },
+      "memory_total": {
+        "default": "mdi:memory"
+      },
+      "last_called_number": {
+        "default": "mdi:phone-outgoing"
+      },
+      "sip_connection": {
+        "default": "mdi:lan-connect"
+      },
+      "uptime": {
+        "default": "mdi:clock-outline"
+      }
+    },
+    "switch": {
+      "mute": {
+        "default": "mdi:microphone-off"
+      }
+    }
+  },
+  "services": {
+    "reboot": {
+      "service": "mdi:restart"
+    }
+  }
+}

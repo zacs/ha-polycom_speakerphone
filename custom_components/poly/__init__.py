@@ -7,31 +7,21 @@ https://github.com/zacs/ha-polycom_speakerphone
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
-import voluptuous as vol
-from homeassistant.const import Platform
-from homeassistant.core import ServiceCall
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_VERIFY_SSL, Platform
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.loader import async_get_loaded_integration
 
 from .api import PolycomApiClient
-from .const import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_VERIFY_SSL,
-    DEFAULT_USERNAME,
-    DOMAIN,
-    LOGGER,
-    SERVICE_REBOOT,
-)
+from .const import DEFAULT_USERNAME, DOMAIN
 from .coordinator import PolycomDataUpdateCoordinator
 from .data import PolycomData
+from .services import async_setup_services
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.typing import ConfigType
 
     from .data import PolycomConfigEntry
 
@@ -42,60 +32,36 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
 ]
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa: ARG001
+    """Set up the integration's actions, shared by all phones."""
+    async_setup_services(hass)
+    return True
+
+
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: PolycomConfigEntry,
 ) -> bool:
     """Set up this integration using UI."""
-    # Create API client
+    verify_ssl = entry.data.get(CONF_VERIFY_SSL, False)
     client = PolycomApiClient(
         host=entry.data[CONF_HOST],
         username=DEFAULT_USERNAME,
         password=entry.data[CONF_PASSWORD],
-        session=async_get_clientsession(hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, False)),
-        verify_ssl=entry.data.get(CONF_VERIFY_SSL, False),
+        session=async_get_clientsession(hass, verify_ssl=verify_ssl),
+        verify_ssl=verify_ssl,
     )
-    
-    # Get initial device info
-    device_info = await client.async_get_device_info()
-    network_info = await client.async_get_network_info()
-    mac_address = device_info.get("MACAddress", "").lower()
-    host = entry.data[CONF_HOST]
-    
-    # Create coordinator
-    coordinator = PolycomDataUpdateCoordinator(
-        hass=hass,
-        logger=LOGGER,
-        name=DOMAIN,
-        update_interval=timedelta(seconds=30),
-    )
-    
-    entry.runtime_data = PolycomData(
-        client=client,
-        integration=async_get_loaded_integration(hass, entry.domain),
-        coordinator=coordinator,
-        device_info=device_info,
-        mac_address=mac_address,
-        host=host,
-    )
+    coordinator = PolycomDataUpdateCoordinator(hass, entry, client)
 
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
+    # Raises ConfigEntryNotReady (retry later) or ConfigEntryAuthFailed (reauth)
     await coordinator.async_config_entry_first_refresh()
 
+    entry.runtime_data = PolycomData(client=client, coordinator=coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-    
-    # Register services
-    async def handle_reboot(call: ServiceCall) -> None:
-        """Handle the reboot service call."""
-        await client.async_reboot()
-        LOGGER.info("Polycom device rebooting")
-    
-    hass.services.async_register(
-        DOMAIN, SERVICE_REBOOT, handle_reboot
-    )
-
     return True
 
 
@@ -104,15 +70,4 @@ async def async_unload_entry(
     entry: PolycomConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
-    # Unregister services
-    hass.services.async_remove(DOMAIN, SERVICE_REBOOT)
-    
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-
-async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: PolycomConfigEntry,
-) -> None:
-    """Reload config entry."""
-    await hass.config_entries.async_reload(entry.entry_id)
