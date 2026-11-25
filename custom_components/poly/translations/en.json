@@ -65,9 +65,6 @@
       },
       "ringing": {
         "name": "Ringing"
-      },
-      "voicemail": {
-        "name": "Voicemail waiting"
       }
     },
     "button": {

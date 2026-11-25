@@ -107,7 +107,11 @@ def _remote_party(data: dict[str, Any]) -> str | None:
 
 def _call_log(data: dict[str, Any], kind: str) -> list[dict[str, Any]] | None:
     """Return the missed, received or placed call log, if the phone has one."""
-    entries = _section(data, "call_logs").get(kind)
+    # The manual spells the keys "missed"; a Trio 8800 on UCS 7.2 sends "Missed"
+    logs = {
+        str(key).lower(): value for key, value in _section(data, "call_logs").items()
+    }
+    entries = logs.get(kind)
     if not isinstance(entries, list):
         return None
     return [entry for entry in entries if isinstance(entry, dict)]

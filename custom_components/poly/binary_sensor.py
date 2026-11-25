@@ -58,20 +58,6 @@ def _ringing(data: dict[str, Any]) -> bool | None:
     return any(call.get("Ringing") == "1" for call in calls)
 
 
-def _message_waiting_light(data: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the message waiting indicator from ledStatus, if reported."""
-    led_status = data.get("led_status")
-    mwi = led_status.get("MWI") if isinstance(led_status, dict) else None
-    return mwi if isinstance(mwi, dict) else None
-
-
-def _voicemail_waiting(data: dict[str, Any]) -> bool | None:
-    """Return whether the message waiting light is lit."""
-    if (mwi := _message_waiting_light(data)) is None or "State" not in mwi:
-        return None
-    return str(mwi["State"]).lower() != "off"
-
-
 @dataclass(frozen=True, kw_only=True)
 class PolycomBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes a Polycom binary sensor."""
@@ -107,12 +93,6 @@ ENTITY_DESCRIPTIONS: tuple[PolycomBinarySensorEntityDescription, ...] = (
         translation_key="ringing",
         is_on_fn=_ringing,
         exists_fn=lambda data: "calls" in data,
-    ),
-    PolycomBinarySensorEntityDescription(
-        key="voicemail",
-        translation_key="voicemail",
-        is_on_fn=_voicemail_waiting,
-        exists_fn=lambda data: _message_waiting_light(data) is not None,
     ),
 )
 

@@ -185,14 +185,6 @@ class PolycomApiClient:
         )
         return response.get("data", {})
 
-    async def async_get_led_status(self) -> dict[str, Any]:
-        """Get the state of the phone's indicator lights, e.g. message waiting."""
-        response = await self._api_wrapper(
-            method="get",
-            url=f"{self._base_url}/mgmt/ledStatus",
-        )
-        return response.get("data", {})
-
     async def async_get_session_stats(self) -> Any:
         """Get media session statistics (an empty list while idle)."""
         response = await self._api_wrapper(
@@ -304,7 +296,6 @@ class PolycomApiClient:
             "call_logs": self.async_get_call_logs,
             "device_stats": self.async_get_device_stats,
             "line_info": self.async_get_line_info,
-            "led_status": self.async_get_led_status,
             "session_stats": self.async_get_session_stats,
             "communication_info": self.async_get_communication_info,
         }

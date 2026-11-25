@@ -46,8 +46,8 @@ async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
         ("sensor", "memory_usage", "54.7"),
         ("sensor", "memory_total", "495.9"),
         # sessionStats is an empty list while idle, so this comes from the log
-        ("sensor", "last_called_number", "1002"),
-        ("sensor", "missed_calls", "1"),
+        ("sensor", "last_called_number", "2025550123"),
+        ("sensor", "missed_calls", "2"),
         ("sensor", "remote_party", STATE_UNKNOWN),
         ("sensor", "sip_connection", "Connected"),
         # NOW minus 15 days, 23 hours, 15 minutes, 32 seconds
@@ -57,7 +57,6 @@ async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
         ("binary_sensor", "line_registered", STATE_ON),
         ("binary_sensor", "line_active", STATE_OFF),
         ("binary_sensor", "ringing", STATE_OFF),
-        ("binary_sensor", "voicemail", STATE_OFF),
         ("switch", "mute", STATE_OFF),
         ("button", "reboot", STATE_UNKNOWN),
     ],
@@ -88,7 +87,7 @@ async def test_entity_count(
     entries = er.async_entries_for_config_entry(
         er.async_get(hass), init_integration.entry_id
     )
-    assert len(entries) == 20  # noqa: PLR2004
+    assert len(entries) == 19  # noqa: PLR2004
 
 
 @pytest.mark.parametrize(

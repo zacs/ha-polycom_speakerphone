@@ -15,9 +15,6 @@
       },
       "ringing": {
         "default": "mdi:phone-ring"
-      },
-      "voicemail": {
-        "default": "mdi:voicemail"
       }
     },
     "sensor": {

@@ -1,0 +1,31 @@
+{
+  "data": {
+    "Missed": [
+      {
+        "LineNumber": "1",
+        "RemotePartyNumber": "sip:+1000@example.com",
+        "StartTime": "2025-05-10T18:40:25",
+        "RemotePartyName": "Garage Speakerphone",
+        "Duration": ""
+      },
+      {
+        "LineNumber": "1",
+        "RemotePartyNumber": "sip:1002@example.com",
+        "StartTime": "2025-08-03T10:35:57",
+        "RemotePartyName": "Kitchen Phone",
+        "Duration": ""
+      }
+    ],
+    "Received": [],
+    "Placed": [
+      {
+        "LineNumber": "1",
+        "RemotePartyNumber": "2025550123",
+        "StartTime": "2025-05-09T10:31:54",
+        "RemotePartyName": "2025550123",
+        "Duration": ""
+      }
+    ]
+  },
+  "Status": "2000"
+}

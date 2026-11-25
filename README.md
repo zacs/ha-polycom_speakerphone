@@ -27,7 +27,6 @@ The component provides entities to monitor the speakerphone, and actions to plac
 | `sensor.<device_name>_last_called_number` | Phone number | Last dialed number |
 | `sensor.<device_name>_missed_calls` | Number | Calls in the phone's missed call log |
 | `binary_sensor.<device_name>_ringing` | On/Off | A call is ringing |
-| `binary_sensor.<device_name>_voicemail_waiting` | On/Off | The message waiting light is lit |
 | `binary_sensor.<device_name>_do_not_disturb` | On/Off | DND status |
 | `binary_sensor.<device_name>_muted` | On/Off | Microphone mute status |
 | `binary_sensor.<device_name>_line_registered` | On/Off | SIP line registration status |
@@ -40,7 +39,7 @@ The component provides entities to monitor the speakerphone, and actions to plac
 | `sensor.<device_name>_uptime` | Timestamp | When the device was last started (Diagnostic) |
 | `button.<device_name>_reboot` | - | Reboot the device (Diagnostic) |
 
-The ringing, remote party, missed calls and voicemail waiting entities are only created if the phone answers the API endpoints they need when the integration starts.
+The ringing, remote party and missed calls entities are only created if the phone answers the API endpoints they need when the integration starts.
 
 ### Actions
 

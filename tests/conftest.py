@@ -1,10 +1,9 @@
 """
 Shared fixtures for the Polycom Speakerphone tests.
 
-By default every endpoint answers with an anonymized capture from a real,
-idle Trio 8800 (see ``fixtures/README.md``), or for endpoints not captured
-yet, a response modeled on Poly's REST API reference manual. Tests override
-single endpoints to cover other states.
+By default every endpoint the integration polls answers with an anonymized
+capture from a real, idle Trio 8800 (see ``fixtures/README.md``). Tests
+override single endpoints to cover other states.
 """
 
 from __future__ import annotations
@@ -46,56 +45,12 @@ ENDPOINTS: dict[str, tuple[str, str]] = {
     "communication_info": ("get", "/api/v1/mgmt/media/communicationInfo"),
     "calls": ("get", "/api/v2/webCallControl/callStatus"),
     "call_logs": ("get", "/api/v1/mgmt/callLogs"),
-    "led_status": ("get", "/api/v1/mgmt/ledStatus"),
     "mute": ("post", "/api/v1/callctrl/mute"),
     "reboot": ("post", "/api/v1/mgmt/safeReboot"),
     "dial": ("post", "/api/v1/callctrl/dial"),
     "answer_call": ("post", "/api/v1/callctrl/answerCall"),
     "reject_call": ("post", "/api/v1/callctrl/rejectCall"),
     "end_call": ("post", "/api/v1/callctrl/endCall"),
-}
-
-# Endpoints not yet captured from a real phone: idle responses modeled on the
-# examples in Poly's REST API reference manual
-MANUAL_EXAMPLES: dict[str, Any] = {
-    # Assumed to answer like callStatus version 1 does when idle
-    "calls": {"Status": "4007", "Error": ""},
-    "call_logs": {
-        "Status": "2000",
-        "data": {
-            "missed": [
-                {
-                    "LineNumber": "1",
-                    "StartTime": "2025-08-02T18:20:00",
-                    "RemotePartyName": "Kitchen",
-                    "RemotePartyNumber": "1002",
-                    "Duration": "0",
-                }
-            ],
-            "received": [],
-            # Oldest first, to check the newest is picked by start time
-            "placed": [
-                {
-                    "LineNumber": "1",
-                    "StartTime": "2025-08-01T09:00:00",
-                    "RemotePartyName": "Garage",
-                    "RemotePartyNumber": "1004",
-                    "Duration": "30",
-                },
-                {
-                    "LineNumber": "1",
-                    "StartTime": "2025-08-03T10:35:57",
-                    "RemotePartyName": "Kitchen",
-                    "RemotePartyNumber": "1002",
-                    "Duration": "42",
-                },
-            ],
-        },
-    },
-    "led_status": {
-        "Status": "2000",
-        "data": {"MWI": {"State": "off"}, "Mute": {"State": "off"}},
-    },
 }
 
 # A connected call as callStatus version 2 reports it, from the manual
@@ -127,9 +82,7 @@ def load_body(name: str) -> Any:
     path = FIXTURES / f"{name}.json"
     if path.exists():
         return json.loads(path.read_text())
-    if name in MANUAL_EXAMPLES:
-        return copy.deepcopy(MANUAL_EXAMPLES[name])
-    # Commands: assume plain success
+    # No capture of the commands yet; assume plain success
     return {"Status": "2000"}
 
 

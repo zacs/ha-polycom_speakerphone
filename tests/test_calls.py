@@ -1,8 +1,8 @@
 """
-Tests for call status, call logs, indicator lights and call control.
+Tests for call status, call logs and call control.
 
-No real phone has been captured during a call yet, so these use the shapes in
-Poly's REST API reference manual.
+No real phone has been captured during a call yet, so calls in progress use
+the shapes in Poly's REST API reference manual.
 """
 
 from __future__ import annotations
@@ -25,6 +25,8 @@ from .conftest import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     from pytest_homeassistant_custom_component.test_util.aiohttp import (
@@ -113,19 +115,28 @@ async def test_last_called_number_prefers_session_stats(
     assert state(hass, mock_config_entry, "sensor", "last_called_number") == "5551234"
 
 
-@pytest.mark.parametrize(("led", "expected"), [("on", STATE_ON), ("off", STATE_OFF)])
-async def test_voicemail_waiting(
+@pytest.mark.parametrize("casing", [str.lower, str.title])
+async def test_call_logs(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
-    led: str,
-    expected: str,
+    casing: Callable[[str], str],
 ) -> None:
-    """The message waiting light shows whether there's voicemail."""
-    mock_device(aioclient_mock, led_status={"MWI": {"State": led}})
+    """Call logs are read whether the lists are "missed" (manual) or "Missed"."""
+    placed = [
+        {"StartTime": "2025-08-01T09:00:00", "RemotePartyNumber": "1004"},
+        {"StartTime": "2025-08-03T10:35:57", "RemotePartyNumber": "1002"},
+        {"StartTime": "2025-08-02T12:00:00", "RemotePartyNumber": "1003"},
+    ]
+    mock_device(
+        aioclient_mock,
+        call_logs={casing("missed"): [{}, {}, {}], casing("placed"): placed},
+    )
     await setup_entry(hass, mock_config_entry)
 
-    assert state(hass, mock_config_entry, "binary_sensor", "voicemail") == expected
+    assert state(hass, mock_config_entry, "sensor", "missed_calls") == "3"
+    # The newest by start time, wherever it is in the list
+    assert state(hass, mock_config_entry, "sensor", "last_called_number") == "1002"
 
 
 async def test_unsupported_endpoints_add_no_entities(
@@ -138,14 +149,12 @@ async def test_unsupported_endpoints_add_no_entities(
         aioclient_mock,
         calls=404,
         call_logs=RawBody({"Status": "4004"}),
-        led_status={"Lines": []},
     )
     await setup_entry(hass, mock_config_entry)
 
     registry = er.async_get(hass)
     for platform, key in (
         ("binary_sensor", "ringing"),
-        ("binary_sensor", "voicemail"),
         ("sensor", "remote_party"),
         ("sensor", "missed_calls"),
     ):
