@@ -54,7 +54,7 @@ async def test_requests_use_basic_auth(
 
 
 @pytest.mark.parametrize(
-    "error", [ClientError(), TimeoutError(), 500, RawBody({"Status": "5000"})]
+    "error", [ClientError(), TimeoutError(), 403, 500, RawBody({"Status": "5000"})]
 )
 async def test_setup_retries_when_device_offline(
     hass: HomeAssistant,

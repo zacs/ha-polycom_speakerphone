@@ -151,8 +151,12 @@ async def test_phone_state_falls_back_to_call_status(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """When pollForStatus is unavailable, callStatus provides the state."""
-    # The State field is assumed; no capture of callStatus during a call yet
-    mock_device(aioclient_mock, poll_status=500, call_status={"State": "Connected"})
+    # Shape from Poly's REST API reference; no capture during a call yet
+    mock_device(
+        aioclient_mock,
+        poll_status=500,
+        call_status={"CallHandle": "9577dd30", "CallState": "Connected"},
+    )
     await setup_entry(hass, mock_config_entry)
 
     entity_id = get_entity_id(hass, "sensor", mock_config_entry, "phone_state")
@@ -192,17 +196,33 @@ async def test_optional_endpoints_unavailable(
     assert state("switch", "mute") == STATE_OFF
 
 
+@pytest.mark.parametrize(
+    ("poll_status", "expected"),
+    [
+        # Shapes from Poly's REST API reference; no capture during a call yet,
+        # so the duration's format is a guess
+        (
+            {"State": "Active", "StateData": "00:01:23"},
+            {"call_duration": "00:01:23", "phone_error": STATE_UNKNOWN},
+        ),
+        (
+            {"State": "Error", "StateData": "All Phone applications are not ready."},
+            {
+                "call_duration": STATE_UNKNOWN,
+                "phone_error": "All Phone applications are not ready.",
+            },
+        ),
+    ],
+)
 async def test_state_data_parsing(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
+    poll_status: dict[str, str],
+    expected: dict[str, str],
 ) -> None:
-    """Duration and error text are surfaced from pollForStatus StateData."""
-    # The StateData wording is assumed; no capture during a call yet
-    mock_device(
-        aioclient_mock,
-        poll_status={"State": "Active", "StateData": "Call duration 00:01:23"},
-    )
+    """StateData is the call duration while Active and error text while Error."""
+    mock_device(aioclient_mock, poll_status=poll_status)
     await setup_entry(hass, mock_config_entry)
 
     def state(key: str) -> str:
@@ -210,9 +230,9 @@ async def test_state_data_parsing(
             get_entity_id(hass, "sensor", mock_config_entry, key)
         ).state
 
-    assert state("phone_state") == "Active"
-    assert state("call_duration") == "Call duration 00:01:23"
-    assert state("phone_error") == STATE_UNKNOWN
+    assert state("phone_state") == poll_status["State"]
+    assert state("call_duration") == expected["call_duration"]
+    assert state("phone_error") == expected["phone_error"]
     assert state("last_call_time") == STATE_UNKNOWN
 
 

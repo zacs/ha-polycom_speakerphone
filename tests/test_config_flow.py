@@ -50,7 +50,9 @@ async def test_user_flow(
     ("error", "expected"),
     [
         (401, "invalid_auth"),
-        (403, "invalid_auth"),
+        # The phone answers 403 to a request made while it's busy with another
+        (403, "cannot_connect"),
+        (RawBody({"Status": "4010"}), "default_password"),
         (ClientError(), "cannot_connect"),
         (TimeoutError(), "cannot_connect"),
         (500, "cannot_connect"),

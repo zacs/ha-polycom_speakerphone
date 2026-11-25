@@ -4,7 +4,7 @@ A custom Home Assistant integration for monitoring and [kind of] controlling Pol
 
 ### Device Compatibility
 
-Polycom's devices seem to sporadically support their API. I only have a Trio 8800 to test with, but it supports only some of the features defined in [their API](https://docs.poly.com/bundle/voice-rest-api-reference-manual-current/page/rest-api-commands-and-structure.html). This component could/should support more models, but it would need to be a model-by-model testing. 
+Polycom's devices seem to sporadically support their API. I only have a Trio 8800 to test with, but it supports only some of the features defined in [their API](https://kaas.hpcloud.hp.com/pdf-public/pdf_14672705_en-US-1.pdf). This component could/should support more models, but it would need to be a model-by-model testing. 
 
 #### Aside/Motivation
 _Not that you asked, but they are remarkably cheap (about $30 used), have a pretty great/modern industrial design, and they play nice with Unifi Talk (including supporting paging/auto-answer), so they make really nice devices for a home intercom system that is built around Unifi Talk. I wanted to be able to make sure the ones I have throughout my house are still online, and have a tiny bit of control over them (albeit a little bit limited due to their slightly older firmware)._
@@ -112,7 +112,7 @@ The integration will automatically discover the device and create all sensors.
 ## API Documentation
 
 This integration uses the Polycom Voice REST API. For more information, see:
-- [Polycom REST API Reference](https://docs.poly.com/bundle/voice-rest-api-reference-manual-current/page/rest-api-commands-and-structure.html)
+- [Poly UC Software and Poly Voice Software REST API Reference Manual (PDF)](https://kaas.hpcloud.hp.com/pdf-public/pdf_14672705_en-US-1.pdf)
 
 ## Troubleshooting
 

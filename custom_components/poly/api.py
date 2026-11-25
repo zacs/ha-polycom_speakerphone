@@ -14,9 +14,31 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
 REQUEST_TIMEOUT = 10
+
+# The "Status" codes from the Error Codes table of Poly's "UC Software and Poly
+# Voice Software REST API Reference Manual"
 API_STATUS_OK = "2000"
-# callStatus answers this ("call does not exist") whenever the phone is idle
+API_STATUS_NOT_ALLOWED = "4003"
 API_STATUS_NO_CALL = "4007"
+API_STATUS_DEFAULT_PASSWORD = "4010"  # noqa: S105 (a status code)
+API_STATUS_DESCRIPTIONS = {
+    "4000": "Invalid input parameters",
+    "4001": "Device busy",
+    "4002": "Line not registered",
+    API_STATUS_NOT_ALLOWED: "Operation not allowed",
+    "4004": "Operation not supported",
+    "4005": "Line does not exist",
+    "4006": "URLs not configured",
+    API_STATUS_NO_CALL: "Call does not exist",
+    "4008": "Configuration export failed",
+    "4009": "Input size limit exceeded",
+    API_STATUS_DEFAULT_PASSWORD: "Default password not allowed",
+    "4011": "Contact not found",
+    "4400": "Bad request",
+    "4403": "Forbidden",
+    "5000": "Failed to process request",
+    "5500": "Internal server error",
+}
 
 
 class PolycomApiClientError(Exception):
@@ -35,11 +57,26 @@ class PolycomApiClientAuthenticationError(
     """Exception to indicate an authentication error."""
 
 
+class PolycomApiClientStatusError(PolycomApiClientError):
+    """The phone refused a request and gave the reason in its "Status" field."""
+
+    def __init__(self, status: str) -> None:
+        """Initialize with the phone's status code."""
+        self.status = status
+        description = API_STATUS_DESCRIPTIONS.get(status, "Unknown status")
+        super().__init__(f"Device returned status {status} ({description})")
+
+
 def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
     """Verify that the response is valid."""
-    if response.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+    if response.status == HTTPStatus.UNAUTHORIZED:
         msg = "Invalid credentials"
         raise PolycomApiClientAuthenticationError(msg)
+    if response.status == HTTPStatus.FORBIDDEN:
+        # The phone handles one request at a time and may answer 403 to one
+        # that arrives while another is in progress, so this isn't a bad password
+        msg = "Device busy with another request"
+        raise PolycomApiClientCommunicationError(msg)
     response.raise_for_status()
 
 
@@ -56,8 +93,7 @@ def _verify_status_or_raise(body: Any, expected: frozenset[str]) -> None:
         None,
         *expected,
     ):
-        msg = f"Device returned status {status}"
-        raise PolycomApiClientError(msg)
+        raise PolycomApiClientStatusError(str(status))
 
 
 def device_mac_address(device_info: dict[str, Any]) -> str | None:
@@ -88,6 +124,8 @@ class PolycomApiClient:
         self._session = session
         self._verify_ssl = verify_ssl
         self._base_url = f"https://{host}/api/v1"
+        # The phone can't process requests in parallel, so send one at a time
+        self._lock = asyncio.Lock()
         # Built by hand: aiohttp.BasicAuth is deprecated in newer aiohttp, and
         # its replacement doesn't exist in the versions older HA releases ship
         credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
@@ -155,11 +193,18 @@ class PolycomApiClient:
         return response.get("data", {})
 
     async def async_set_mute(self, *, mute: bool) -> dict[str, Any]:
-        """Set the mute state of the phone."""
+        """
+        Set the mute state of the phone.
+
+        The phone answers 4003 when the request wouldn't change the mute state
+        (already muted, say), which isn't a failure. It answers 4007 when
+        there's no call to mute.
+        """
         return await self._api_wrapper(
             method="post",
             url=f"{self._base_url}/callctrl/mute",
             data={"data": {"state": "1" if mute else "0"}},
+            expected_statuses=frozenset({API_STATUS_OK, API_STATUS_NOT_ALLOWED}),
         )
 
     async def async_reboot(self) -> dict[str, Any]:
@@ -205,6 +250,7 @@ class PolycomApiClient:
         """Make a request to the device and return the decoded JSON body."""
         try:
             async with (
+                self._lock,
                 asyncio.timeout(REQUEST_TIMEOUT),
                 self._session.request(
                     method=method,

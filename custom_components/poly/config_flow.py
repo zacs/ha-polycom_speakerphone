@@ -11,10 +11,12 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
+    API_STATUS_DEFAULT_PASSWORD,
     PolycomApiClient,
     PolycomApiClientAuthenticationError,
     PolycomApiClientCommunicationError,
     PolycomApiClientError,
+    PolycomApiClientStatusError,
     device_mac_address,
 )
 from .const import DEFAULT_USERNAME, DOMAIN, LOGGER
@@ -158,6 +160,11 @@ class PolycomFlowHandler(ConfigFlow, domain=DOMAIN):
         except PolycomApiClientCommunicationError as exception:
             LOGGER.debug("Unable to connect to %s: %s", data[CONF_HOST], exception)
             return None, {"base": "cannot_connect"}
+        except PolycomApiClientStatusError as exception:
+            if exception.status == API_STATUS_DEFAULT_PASSWORD:
+                return None, {"base": "default_password"}
+            LOGGER.exception("Unexpected error connecting to %s", data[CONF_HOST])
+            return None, {"base": "unknown"}
         except PolycomApiClientError:
             LOGGER.exception("Unexpected error connecting to %s", data[CONF_HOST])
             return None, {"base": "unknown"}

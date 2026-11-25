@@ -39,6 +39,7 @@
     "error": {
       "invalid_auth": "Authentication failed. Check the admin password.",
       "cannot_connect": "Unable to connect to the Polycom device. Please check the IP address, the network connection, and that the REST API is enabled.",
+      "default_password": "The phone still has its default admin password, and its REST API refuses requests until that's changed. Set a new admin password on the phone, then try again.",
       "unknown": "Unknown error occurred."
     },
     "abort": {

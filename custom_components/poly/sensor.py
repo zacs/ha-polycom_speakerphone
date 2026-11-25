@@ -42,23 +42,32 @@ def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _state_data(data: dict[str, Any]) -> str:
-    """Return the free-form StateData text from pollForStatus."""
-    state_data = _section(data, "poll_status").get("StateData")
-    return state_data if isinstance(state_data, str) else ""
+def _state_data(data: dict[str, Any], state: str) -> str | None:
+    """
+    Return pollForStatus StateData while the phone is in the given State.
+
+    Per Poly's REST API reference, StateData holds the time of the last call
+    while "Idle", the call duration while "Active", and error text while
+    "Error".
+    """
+    poll_status = _section(data, "poll_status")
+    state_data = poll_status.get("StateData")
+    if poll_status.get("State") != state or not isinstance(state_data, str):
+        return None
+    return state_data
 
 
 def _phone_state(data: dict[str, Any]) -> str:
     """Prefer pollForStatus for real-time state; fall back to callStatus."""
     if state := _section(data, "poll_status").get("State"):
         return state
-    return _section(data, "call_status").get("State", "Idle")
+    return _section(data, "call_status").get("CallState", "Idle")
 
 
 def _last_call_time(data: dict[str, Any]) -> datetime | None:
     """Parse 'Time of last call 2025-08-03T10:35:57' from StateData."""
-    state_data = _state_data(data)
-    if "Time of last call" not in state_data:
+    state_data = _state_data(data, "Idle")
+    if state_data is None or "Time of last call" not in state_data:
         return None
     try:
         last_call = datetime.fromisoformat(
@@ -73,17 +82,13 @@ def _last_call_time(data: dict[str, Any]) -> datetime | None:
 
 
 def _call_duration(data: dict[str, Any]) -> str | None:
-    """Return StateData while it describes a call duration."""
-    state_data = _state_data(data)
-    return state_data if "duration" in state_data.lower() else None
+    """Return the active call's duration, as the phone formats it."""
+    return _state_data(data, "Active")
 
 
 def _phone_error(data: dict[str, Any]) -> str | None:
-    """Return StateData while it describes an error."""
-    state_data = _state_data(data).lower()
-    if "error" in state_data or "fail" in state_data:
-        return _state_data(data)
-    return None
+    """Return the phone's error text, e.g. "All Phone applications are not ready"."""
+    return _state_data(data, "Error")
 
 
 def _cpu_usage(data: dict[str, Any]) -> float | None:
