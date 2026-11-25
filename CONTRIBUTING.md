@@ -44,7 +44,16 @@ People *love* thorough bug reports. I'm not even kidding.
 
 ## Use a Consistent Coding Style
 
-Use [black](https://github.com/ambv/black) to make sure the code follows the style.
+Use [Ruff](https://docs.astral.sh/ruff/) to format and lint the code (`scripts/lint` runs both).
+
+## Run the tests
+
+```sh
+python3 -m pip install -r requirements_test.txt
+python3 -m pytest
+```
+
+The tests run against mocked device responses, so no speakerphone is needed.
 
 ## Test your code modification
 

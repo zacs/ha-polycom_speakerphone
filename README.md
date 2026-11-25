@@ -31,13 +31,21 @@ The component really just provides some entities to monitor the speakerphone, wh
 | `switch.<device_name>_mute` | On/Off | Control microphone mute |
 | `sensor.<device_name>_cpu_usage` | 0-100% | Processor utilization (Diagnostic) |
 | `sensor.<device_name>_memory_usage` | 0-100% | Memory utilization (Diagnostic) |
-| `sensor.<device_name>_memory_total` | MB | Total memory available (Diagnostic) |
+| `sensor.<device_name>_memory_total` | MiB | Total memory available (Diagnostic) |
 | `sensor.<device_name>_sip_connection` | Connected, Disconnected, Unknown | SIP server connection status (Diagnostic) |
 | `sensor.<device_name>_uptime` | Timestamp | When the device was last started (Diagnostic) |
 | `button.<device_name>_reboot` | - | Reboot the device (Diagnostic) |
 
-### Services
-- **`polycom_speakerphone.reboot`**: Safely (after calls have completed) reboot the device
+### Actions
+- **`poly.reboot`**: Safely (after calls have completed) reboot a speakerphone. If you have more than one, choose which with `config_entry_id`:
+
+  ```yaml
+  action: poly.reboot
+  data:
+    config_entry_id: <pick the speakerphone in the action editor>
+  ```
+
+  With a single speakerphone, `config_entry_id` can be left out. The **Reboot** button entity does the same thing.
 
 ## Screenshot
 
@@ -57,7 +65,7 @@ The component really just provides some entities to monitor the speakerphone, wh
 9. Restart Home Assistant
 
 ### Manual Installation
-1. Copy the `custom_components/polycom_speakerphone` directory to your Home Assistant's `custom_components` directory
+1. Copy the `custom_components/poly` directory to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
 
 ## Speakerphone Setup
@@ -77,15 +85,27 @@ You need to enable the REST API on the Trio.
 2. Click **Add Integration**
 3. Search for **Polycom Speakerphone**
 4. Enter the required information:
-   - **IP Address**: The IP address of your Polycom Trio 8800
+   - **IP address**: The IP address of your Polycom Trio 8800
    - **Password**: The device password
-   - **Verify SSL Certificate**: Typically set to false for local devices with self-signed certificates
+   - **Verify SSL certificate**: Typically set to false for local devices with self-signed certificates
 5. Click **Submit**
 
 The integration will automatically discover the device and create all sensors.
 
+### Changing the IP address or password
+
+- **New IP address**: on the integration's entry in **Settings** > **Devices & Services**, open the menu and choose **Reconfigure**. Re-adding the same phone at its new address also updates the existing entry.
+- **New password**: Home Assistant notices the phone rejecting the old password and asks you to re-authenticate.
+
+## Removal
+
+1. Go to **Settings** > **Devices & Services** and select **Polycom Speakerphone**.
+2. Open the menu on each speakerphone's entry and choose **Delete**.
+3. If you no longer want the integration, remove it in HACS (or delete `custom_components/poly`) and restart Home Assistant.
+
 ## Requirements
 
+- Home Assistant 2025.2.4 or newer
 - Polycom Trio 8800 speakerphone
 - REST API enabled on the Polycom device (not enabled by default)
 
