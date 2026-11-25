@@ -62,6 +62,12 @@
       },
       "line_active": {
         "name": "Line active"
+      },
+      "ringing": {
+        "name": "Ringing"
+      },
+      "voicemail": {
+        "name": "Voicemail waiting"
       }
     },
     "button": {
@@ -99,6 +105,12 @@
       },
       "uptime": {
         "name": "Uptime"
+      },
+      "remote_party": {
+        "name": "Remote party"
+      },
+      "missed_calls": {
+        "name": "Missed calls"
       }
     },
     "switch": {
@@ -121,13 +133,16 @@
       "message": "The speakerphone did not accept the reboot request: {error}"
     },
     "config_entry_required": {
-      "message": "More than one speakerphone is set up; choose which one to reboot."
+      "message": "More than one speakerphone is set up; choose which one to use."
     },
     "config_entry_not_found": {
       "message": "No Polycom speakerphone is set up with the ID {entry_id}."
     },
     "config_entry_not_loaded": {
       "message": "The speakerphone {title} is not loaded."
+    },
+    "no_active_call": {
+      "message": "The speakerphone {title} has no call to end."
     }
   },
   "services": {
@@ -137,7 +152,55 @@
       "fields": {
         "config_entry_id": {
           "name": "Speakerphone",
-          "description": "The speakerphone to reboot. Optional when only one is set up."
+          "description": "The speakerphone to use. Optional when only one is set up."
+        }
+      }
+    },
+    "dial": {
+      "name": "Dial",
+      "description": "Call a number or SIP address from a speakerphone.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Speakerphone",
+          "description": "The speakerphone to use. Optional when only one is set up."
+        },
+        "number": {
+          "name": "Number",
+          "description": "The extension, phone number or SIP address to call."
+        },
+        "line": {
+          "name": "Line",
+          "description": "The phone line to call from. Defaults to line 1."
+        }
+      }
+    },
+    "answer_call": {
+      "name": "Answer call",
+      "description": "Answer a speakerphone's incoming call.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Speakerphone",
+          "description": "The speakerphone to use. Optional when only one is set up."
+        }
+      }
+    },
+    "reject_call": {
+      "name": "Reject call",
+      "description": "Reject a speakerphone's incoming call.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Speakerphone",
+          "description": "The speakerphone to use. Optional when only one is set up."
+        }
+      }
+    },
+    "end_call": {
+      "name": "End call",
+      "description": "Hang up a speakerphone's current call.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Speakerphone",
+          "description": "The speakerphone to use. Optional when only one is set up."
         }
       }
     }

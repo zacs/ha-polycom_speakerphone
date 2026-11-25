@@ -2,8 +2,9 @@
 Shared fixtures for the Polycom Speakerphone tests.
 
 By default every endpoint answers with an anonymized capture from a real,
-idle Trio 8800 (see ``fixtures/README.md``). Tests override single endpoints
-to cover other states.
+idle Trio 8800 (see ``fixtures/README.md``), or for endpoints not captured
+yet, a response modeled on Poly's REST API reference manual. Tests override
+single endpoints to cover other states.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_VERIFY_SSL
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.poly.const import DOMAIN
@@ -42,8 +44,74 @@ ENDPOINTS: dict[str, tuple[str, str]] = {
     "line_info": ("get", "/api/v2/mgmt/lineInfo"),
     "session_stats": ("get", "/api/v1/mgmt/media/sessionStats"),
     "communication_info": ("get", "/api/v1/mgmt/media/communicationInfo"),
+    "calls": ("get", "/api/v2/webCallControl/callStatus"),
+    "call_logs": ("get", "/api/v1/mgmt/callLogs"),
+    "led_status": ("get", "/api/v1/mgmt/ledStatus"),
     "mute": ("post", "/api/v1/callctrl/mute"),
     "reboot": ("post", "/api/v1/mgmt/safeReboot"),
+    "dial": ("post", "/api/v1/callctrl/dial"),
+    "answer_call": ("post", "/api/v1/callctrl/answerCall"),
+    "reject_call": ("post", "/api/v1/callctrl/rejectCall"),
+    "end_call": ("post", "/api/v1/callctrl/endCall"),
+}
+
+# Endpoints not yet captured from a real phone: idle responses modeled on the
+# examples in Poly's REST API reference manual
+MANUAL_EXAMPLES: dict[str, Any] = {
+    # Assumed to answer like callStatus version 1 does when idle
+    "calls": {"Status": "4007", "Error": ""},
+    "call_logs": {
+        "Status": "2000",
+        "data": {
+            "missed": [
+                {
+                    "LineNumber": "1",
+                    "StartTime": "2025-08-02T18:20:00",
+                    "RemotePartyName": "Kitchen",
+                    "RemotePartyNumber": "1002",
+                    "Duration": "0",
+                }
+            ],
+            "received": [],
+            # Oldest first, to check the newest is picked by start time
+            "placed": [
+                {
+                    "LineNumber": "1",
+                    "StartTime": "2025-08-01T09:00:00",
+                    "RemotePartyName": "Garage",
+                    "RemotePartyNumber": "1004",
+                    "Duration": "30",
+                },
+                {
+                    "LineNumber": "1",
+                    "StartTime": "2025-08-03T10:35:57",
+                    "RemotePartyName": "Kitchen",
+                    "RemotePartyNumber": "1002",
+                    "Duration": "42",
+                },
+            ],
+        },
+    },
+    "led_status": {
+        "Status": "2000",
+        "data": {"MWI": {"State": "off"}, "Mute": {"State": "off"}},
+    },
+}
+
+# A connected call as callStatus version 2 reports it, from the manual
+CONNECTED_CALL: dict[str, str] = {
+    "CallHandle": "b5576ff8",
+    "Type": "Incoming",
+    "RemotePartyName": "Test 1171",
+    "RemotePartyNumber": "1171",
+    "CallState": "Connected",
+    "Protocol": "SIP",
+    "StartTime": "2017-08-24T12:07:49",
+    "DurationSeconds": "25",
+    "LineID": "1",
+    "CallSequence": "1",
+    "Ringing": "0",
+    "Muted": "0",
 }
 
 
@@ -57,10 +125,12 @@ class RawBody:
 def load_body(name: str) -> Any:
     """Return the captured response body for an endpoint."""
     path = FIXTURES / f"{name}.json"
-    if not path.exists():
-        # No capture of the command endpoints yet; assume plain success
-        return {"Status": "2000"}
-    return json.loads(path.read_text())
+    if path.exists():
+        return json.loads(path.read_text())
+    if name in MANUAL_EXAMPLES:
+        return copy.deepcopy(MANUAL_EXAMPLES[name])
+    # Commands: assume plain success
+    return {"Status": "2000"}
 
 
 def load_data(name: str) -> Any:
@@ -92,6 +162,24 @@ def mock_device(
             register(url, json=value.body)
         else:
             register(url, json={"Status": "2000", "data": value})
+
+
+def get_entity_id(
+    hass: HomeAssistant, platform: str, entry: MockConfigEntry, key: str
+) -> str:
+    """Look up an entity by the unique ID the integration has always used."""
+    entity_id = er.async_get(hass).async_get_entity_id(
+        platform, DOMAIN, f"{entry.entry_id}_{key}"
+    )
+    assert entity_id is not None, f"{platform} {key} not registered"
+    return entity_id
+
+
+async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    """Add and set up a config entry."""
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
 
 
 @pytest.fixture(autouse=True)

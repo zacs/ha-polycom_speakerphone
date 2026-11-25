@@ -17,5 +17,10 @@ Notable behavior these captures show:
   when idle.
 
 `network_info` isn't requested by the integration; it's kept as a reference.
-There are no captures yet of the phone during a call, or of the responses to
-the mute and reboot commands, so tests covering those use made-up payloads.
+
+There are no captures yet of the phone during a call, of callStatus version 2,
+callLogs or ledStatus, or of the responses to commands (mute, reboot, dial,
+answer, reject, end call). Tests covering those use the response shapes from
+Poly's "UC Software and Poly Voice Software REST API Reference Manual"
+(`MANUAL_EXAMPLES` and `CONNECTED_CALL` in `conftest.py`). `scripts/capture`
+prints a phone's responses for every endpoint the integration reads.

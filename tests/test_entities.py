@@ -13,7 +13,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.poly.const import DOMAIN
 
-from .conftest import MAC, load_data, mock_device
+from .conftest import MAC, get_entity_id, load_data, mock_device, setup_entry
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
@@ -24,24 +24,6 @@ if TYPE_CHECKING:
     )
 
 NOW = "2025-09-01T12:00:00+00:00"
-
-
-def get_entity_id(
-    hass: HomeAssistant, platform: str, entry: MockConfigEntry, key: str
-) -> str:
-    """Look up an entity by the unique ID the integration has always used."""
-    entity_id = er.async_get(hass).async_get_entity_id(
-        platform, DOMAIN, f"{entry.entry_id}_{key}"
-    )
-    assert entity_id is not None, f"{platform} {key} not registered"
-    return entity_id
-
-
-async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    """Add and set up a config entry."""
-    entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
 
 
 async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
@@ -63,8 +45,10 @@ async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
         # 284389376 of 519995392 bytes; "Used" includes the page cache
         ("sensor", "memory_usage", "54.7"),
         ("sensor", "memory_total", "495.9"),
-        # sessionStats is an empty list while idle
-        ("sensor", "last_called_number", STATE_UNKNOWN),
+        # sessionStats is an empty list while idle, so this comes from the log
+        ("sensor", "last_called_number", "1002"),
+        ("sensor", "missed_calls", "1"),
+        ("sensor", "remote_party", STATE_UNKNOWN),
         ("sensor", "sip_connection", "Connected"),
         # NOW minus 15 days, 23 hours, 15 minutes, 32 seconds
         ("sensor", "uptime", "2025-08-16T12:44:28+00:00"),
@@ -72,6 +56,8 @@ async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
         ("binary_sensor", "mute_status", STATE_OFF),
         ("binary_sensor", "line_registered", STATE_ON),
         ("binary_sensor", "line_active", STATE_OFF),
+        ("binary_sensor", "ringing", STATE_OFF),
+        ("binary_sensor", "voicemail", STATE_OFF),
         ("switch", "mute", STATE_OFF),
         ("button", "reboot", STATE_UNKNOWN),
     ],
@@ -102,7 +88,7 @@ async def test_entity_count(
     entries = er.async_entries_for_config_entry(
         er.async_get(hass), init_integration.entry_id
     )
-    assert len(entries) == 16  # noqa: PLR2004
+    assert len(entries) == 20  # noqa: PLR2004
 
 
 @pytest.mark.parametrize(
@@ -199,18 +185,11 @@ async def test_optional_endpoints_unavailable(
 @pytest.mark.parametrize(
     ("poll_status", "expected"),
     [
-        # Shapes from Poly's REST API reference; no capture during a call yet,
-        # so the duration's format is a guess
-        (
-            {"State": "Active", "StateData": "00:01:23"},
-            {"call_duration": "00:01:23", "phone_error": STATE_UNKNOWN},
-        ),
+        # Shapes from Poly's REST API reference; no capture during a call yet
+        ({"State": "Active", "StateData": "00:01:23"}, STATE_UNKNOWN),
         (
             {"State": "Error", "StateData": "All Phone applications are not ready."},
-            {
-                "call_duration": STATE_UNKNOWN,
-                "phone_error": "All Phone applications are not ready.",
-            },
+            "All Phone applications are not ready.",
         ),
     ],
 )
@@ -219,9 +198,9 @@ async def test_state_data_parsing(
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
     poll_status: dict[str, str],
-    expected: dict[str, str],
+    expected: str,
 ) -> None:
-    """StateData is the call duration while Active and error text while Error."""
+    """StateData is error text while the State is Error."""
     mock_device(aioclient_mock, poll_status=poll_status)
     await setup_entry(hass, mock_config_entry)
 
@@ -231,8 +210,7 @@ async def test_state_data_parsing(
         ).state
 
     assert state("phone_state") == poll_status["State"]
-    assert state("call_duration") == expected["call_duration"]
-    assert state("phone_error") == expected["phone_error"]
+    assert state("phone_error") == expected
     assert state("last_call_time") == STATE_UNKNOWN
 
 

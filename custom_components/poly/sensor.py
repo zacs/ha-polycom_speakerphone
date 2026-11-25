@@ -12,11 +12,16 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfInformation,
+    UnitOfTime,
+)
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
-from .entity import PolycomEntity
+from .entity import PolycomEntity, current_call
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -81,9 +86,58 @@ def _last_call_time(data: dict[str, Any]) -> datetime | None:
     return last_call
 
 
-def _call_duration(data: dict[str, Any]) -> str | None:
-    """Return the active call's duration, as the phone formats it."""
-    return _state_data(data, "Active")
+def _call_duration(data: dict[str, Any]) -> int | None:
+    """Return how long the current call has lasted, in seconds."""
+    if (call := current_call(data)) is None:
+        return None
+    # The manual's examples use both spellings
+    duration = call.get("DurationSeconds", call.get("DurationInSeconds"))
+    try:
+        return int(duration)
+    except (TypeError, ValueError):
+        return None
+
+
+def _remote_party(data: dict[str, Any]) -> str | None:
+    """Return the name, or else the number, of the other party on the call."""
+    if (call := current_call(data)) is None:
+        return None
+    return call.get("RemotePartyName") or call.get("RemotePartyNumber") or None
+
+
+def _call_log(data: dict[str, Any], kind: str) -> list[dict[str, Any]] | None:
+    """Return the missed, received or placed call log, if the phone has one."""
+    entries = _section(data, "call_logs").get(kind)
+    if not isinstance(entries, list):
+        return None
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _latest(entries: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the most recent call log entry."""
+    try:
+        return max(
+            entries, key=lambda entry: datetime.fromisoformat(entry["StartTime"])
+        )
+    except (KeyError, TypeError, ValueError):
+        # No usable start times; assume the phone lists newest first
+        return entries[0] if entries else None
+
+
+def _missed_calls(data: dict[str, Any]) -> int | None:
+    """Return how many calls are in the missed call log."""
+    missed = _call_log(data, "missed")
+    return None if missed is None else len(missed)
+
+
+def _last_called_number(data: dict[str, Any]) -> str | None:
+    """Return the last number dialed, from session stats or the call log."""
+    if number := _section(data, "session_stats").get("LastCalledNumber"):
+        return number
+    if (latest := _latest(_call_log(data, "placed") or [])) is None:
+        return None
+    number = latest.get("RemotePartyNumber")
+    return None if number in (None, "") else str(number)
 
 
 def _phone_error(data: dict[str, Any]) -> str | None:
@@ -166,6 +220,8 @@ class PolycomSensorEntityDescription(SensorEntityDescription):
     """Describes a Polycom sensor."""
 
     value_fn: Callable[[dict[str, Any]], StateType | datetime]
+    # Whether the phone supports this sensor, judged from the first poll
+    exists_fn: Callable[[dict[str, Any]], bool] = lambda _: True
 
 
 ENTITY_DESCRIPTIONS: tuple[PolycomSensorEntityDescription, ...] = (
@@ -183,7 +239,21 @@ ENTITY_DESCRIPTIONS: tuple[PolycomSensorEntityDescription, ...] = (
     PolycomSensorEntityDescription(
         key="call_duration",
         translation_key="call_duration",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
         value_fn=_call_duration,
+    ),
+    PolycomSensorEntityDescription(
+        key="remote_party",
+        translation_key="remote_party",
+        value_fn=_remote_party,
+        exists_fn=lambda data: "calls" in data,
+    ),
+    PolycomSensorEntityDescription(
+        key="missed_calls",
+        translation_key="missed_calls",
+        value_fn=_missed_calls,
+        exists_fn=lambda data: _call_log(data, "missed") is not None,
     ),
     PolycomSensorEntityDescription(
         key="phone_error",
@@ -217,7 +287,7 @@ ENTITY_DESCRIPTIONS: tuple[PolycomSensorEntityDescription, ...] = (
     PolycomSensorEntityDescription(
         key="last_called_number",
         translation_key="last_called_number",
-        value_fn=lambda data: _section(data, "session_stats").get("LastCalledNumber"),
+        value_fn=_last_called_number,
     ),
     PolycomSensorEntityDescription(
         key="sip_connection",
@@ -248,6 +318,7 @@ async def async_setup_entry(
             entity_description=description,
         )
         for description in ENTITY_DESCRIPTIONS
+        if description.exists_fn(coordinator.data)
     )
 
 

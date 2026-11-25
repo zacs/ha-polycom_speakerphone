@@ -157,7 +157,7 @@ async def test_reboot_service_requires_target_with_several_devices(
     await _setup_two_devices(hass, aioclient_mock)
     aioclient_mock.mock_calls.clear()
 
-    with pytest.raises(ServiceValidationError, match="choose which one to reboot"):
+    with pytest.raises(ServiceValidationError, match="choose which one to use"):
         await hass.services.async_call(DOMAIN, "reboot", {}, blocking=True)
     assert reboot_calls(aioclient_mock) == []
 

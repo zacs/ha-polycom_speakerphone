@@ -55,6 +55,20 @@ python3 -m pytest
 
 The tests run against mocked device responses, so no speakerphone is needed.
 
+## Check what a phone's API returns
+
+Poly phones differ in which REST API endpoints they support, and the
+documented ones don't always respond. To see what a phone returns for every
+endpoint this integration reads:
+
+```sh
+scripts/capture <phone-ip> > capture.txt
+```
+
+It only sends GET requests, so it doesn't change anything on the phone. The
+output includes MAC and IP addresses and call logs with names and numbers;
+redact them before sharing it.
+
 ## Test your code modification
 
 This custom component is based on [integration_blueprint template](https://github.com/ludeeus/integration_blueprint).

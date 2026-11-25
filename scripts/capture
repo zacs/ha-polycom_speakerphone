@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# Print what a Poly phone's REST API returns for every endpoint this
+# integration reads, to check which ones a model or firmware supports and
+# what shape their responses take.
+#
+# Usage: scripts/capture <phone-ip-or-hostname> [> capture.txt]
+#
+# Read-only: it sends GET requests only. Never add a POST endpoint here;
+# those make the phone do things (call, mute, reboot).
+#
+# The output includes the phone's MAC and IP addresses, and call logs with
+# names and numbers. Redact them before sharing it publicly.
+
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <phone-ip-or-hostname>" >&2
+    exit 2
+fi
+host="$1"
+
+endpoints=(
+    # Polled by the integration today
+    v2/mgmt/device/info
+    v1/mgmt/pollForStatus
+    v1/webCallControl/callStatus
+    v1/mgmt/device/stats
+    v2/mgmt/lineInfo
+    v1/mgmt/media/sessionStats
+    v1/mgmt/media/communicationInfo
+    # Calls, call logs and indicator lights
+    v2/webCallControl/callStatus
+    v1/mgmt/callLogs
+    v1/mgmt/ledStatus
+)
+
+read -r -s -p "Admin password for Polycom@$host: " password
+echo >&2
+
+# Hand curl the credentials on stdin so they don't show in the process list
+escaped=${password//\\/\\\\}
+escaped=${escaped//\"/\\\"}
+credentials="user = \"Polycom:$escaped\""
+unset password escaped
+
+for path in "${endpoints[@]}"; do
+    echo "===== $path"
+    # The phone answers 403 to a request made while it's busy with another
+    # (Home Assistant polling it, say), so try again before giving up
+    for attempt in 1 2 3; do
+        body=$(curl --config - --silent --show-error --insecure --max-time 10 \
+            --request GET --write-out '\n[HTTP %{http_code}]' \
+            "https://$host/api/$path" <<<"$credentials" 2>&1) || true
+        [[ $body == *"[HTTP 403]" && $attempt -lt 3 ]] || break
+        sleep 2
+    done
+    echo "$body"
+done
+
+echo >&2
+echo "Done. Redact MAC/IP addresses, names and numbers before sharing publicly." >&2

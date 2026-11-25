@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import socket
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,8 @@ import aiohttp
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+LOGGER = logging.getLogger(__package__)
 
 REQUEST_TIMEOUT = 10
 
@@ -107,6 +110,14 @@ def device_mac_address(device_info: dict[str, Any]) -> str | None:
     return str(mac_address).lower() if mac_address else None
 
 
+def active_call(calls: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the connected call if there is one, otherwise the first call."""
+    return next(
+        (call for call in calls if call.get("CallState") == "Connected"),
+        calls[0] if calls else None,
+    )
+
+
 class PolycomApiClient:
     """Polycom Trio 8800 API Client."""
 
@@ -150,6 +161,36 @@ class PolycomApiClient:
             expected_statuses=frozenset({API_STATUS_OK, API_STATUS_NO_CALL}),
         )
         # Idle replies are {"Status": "4007", "Error": ""}, with no data
+        return response.get("data", {})
+
+    async def async_get_calls(self) -> list[dict[str, Any]]:
+        """Get every call on the phone (callStatus version 2); empty when idle."""
+        response = await self._api_wrapper(
+            method="get",
+            url=f"https://{self._host}/api/v2/webCallControl/callStatus",
+            expected_statuses=frozenset({API_STATUS_OK, API_STATUS_NO_CALL}),
+        )
+        calls = response.get("data", [])
+        return (
+            [call for call in calls if isinstance(call, dict)]
+            if isinstance(calls, list)
+            else []
+        )
+
+    async def async_get_call_logs(self) -> dict[str, Any]:
+        """Get the missed, received and placed call logs."""
+        response = await self._api_wrapper(
+            method="get",
+            url=f"{self._base_url}/mgmt/callLogs",
+        )
+        return response.get("data", {})
+
+    async def async_get_led_status(self) -> dict[str, Any]:
+        """Get the state of the phone's indicator lights, e.g. message waiting."""
+        response = await self._api_wrapper(
+            method="get",
+            url=f"{self._base_url}/mgmt/ledStatus",
+        )
         return response.get("data", {})
 
     async def async_get_session_stats(self) -> Any:
@@ -214,21 +255,56 @@ class PolycomApiClient:
             url=f"{self._base_url}/mgmt/safeReboot",
         )
 
+    async def async_dial(self, number: str, line: int | None = None) -> None:
+        """Call a number or SIP URI, on line 1 unless another is given."""
+        call: dict[str, str] = {"Dest": number}
+        if line is not None:
+            call["Line"] = str(line)
+        await self._api_wrapper(
+            method="post",
+            url=f"{self._base_url}/callctrl/dial",
+            data={"data": call},
+        )
+
+    async def async_answer_call(self) -> None:
+        """Answer the incoming call."""
+        await self._api_wrapper(
+            method="post", url=f"{self._base_url}/callctrl/answerCall"
+        )
+
+    async def async_reject_call(self) -> None:
+        """Reject the incoming call."""
+        await self._api_wrapper(
+            method="post", url=f"{self._base_url}/callctrl/rejectCall"
+        )
+
+    async def async_end_call(self, call_handle: str) -> None:
+        """End a call, identified by its handle from callStatus."""
+        await self._api_wrapper(
+            method="post",
+            url=f"{self._base_url}/callctrl/endCall",
+            data={"data": {"Ref": call_handle}},
+        )
+
     async def async_get_all_data(self) -> dict[str, Any]:
         """
         Get all polled device data.
 
         Device info is required; every other endpoint is optional because
-        firmware versions differ in which ones they support.
+        firmware versions differ in which ones they support. An optional
+        endpoint that fails is left out of the result.
         """
         device_info = await self.async_get_device_info()
 
-        # Fetched one at a time to avoid overwhelming the phone's web server
+        # Fetched one at a time; the phone can't handle parallel requests
         optional: dict[str, Callable[[], Awaitable[Any]]] = {
             "poll_status": self.async_poll_for_status,
             "call_status": self.async_get_call_status,
+            "calls": self.async_get_calls,
+            "call_logs": self.async_get_call_logs,
             "device_stats": self.async_get_device_stats,
             "line_info": self.async_get_line_info,
+            "led_status": self.async_get_led_status,
             "session_stats": self.async_get_session_stats,
             "communication_info": self.async_get_communication_info,
         }
@@ -236,8 +312,8 @@ class PolycomApiClient:
         for key, fetch in optional.items():
             try:
                 data[key] = await fetch()
-            except PolycomApiClientError:
-                data[key] = [] if key == "line_info" else {}
+            except PolycomApiClientError as exception:
+                LOGGER.debug("Skipping %s: %s", key, exception)
         return data
 
     async def _api_wrapper(

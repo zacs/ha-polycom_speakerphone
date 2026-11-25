@@ -1,7 +1,35 @@
 reboot:
   fields:
-    config_entry_id:
+    config_entry_id: &config_entry_id
       required: false
       selector:
         config_entry:
           integration: poly
+
+dial:
+  fields:
+    config_entry_id: *config_entry_id
+    number:
+      required: true
+      example: "1002"
+      selector:
+        text:
+    line:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 24
+          mode: box
+
+answer_call:
+  fields:
+    config_entry_id: *config_entry_id
+
+reject_call:
+  fields:
+    config_entry_id: *config_entry_id
+
+end_call:
+  fields:
+    config_entry_id: *config_entry_id

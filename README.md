@@ -13,17 +13,21 @@ _Anyway..._
 
 ## Features
 
-The component really just provides some entities to monitor the speakerphone, which are:
+The component provides entities to monitor the speakerphone, and actions to place and handle calls.
 
 ### Entities
 
 | Entity | Possible Values | Notes |
 |--------|-----------------|-------|
-| `sensor.<device_name>_phone_state` | Idle, Ringing, Active, etc. | Current phone status from pollForStatus |
+| `sensor.<device_name>_phone_state` | Idle, Active, Error | Current phone status from pollForStatus |
 | `sensor.<device_name>_last_call_time` | Timestamp | When the last call occurred |
-| `sensor.<device_name>_call_duration` | Text | Duration information during active calls |
-| `sensor.<device_name>_phone_error` | Text or None | Error messages if any |
+| `sensor.<device_name>_call_duration` | Seconds | How long the current call has lasted |
+| `sensor.<device_name>_remote_party` | Name or number | Who's on the current call |
+| `sensor.<device_name>_phone_error` | Text or None | The phone's error message, if it reports one |
 | `sensor.<device_name>_last_called_number` | Phone number | Last dialed number |
+| `sensor.<device_name>_missed_calls` | Number | Calls in the phone's missed call log |
+| `binary_sensor.<device_name>_ringing` | On/Off | A call is ringing |
+| `binary_sensor.<device_name>_voicemail_waiting` | On/Off | The message waiting light is lit |
 | `binary_sensor.<device_name>_do_not_disturb` | On/Off | DND status |
 | `binary_sensor.<device_name>_muted` | On/Off | Microphone mute status |
 | `binary_sensor.<device_name>_line_registered` | On/Off | SIP line registration status |
@@ -36,16 +40,26 @@ The component really just provides some entities to monitor the speakerphone, wh
 | `sensor.<device_name>_uptime` | Timestamp | When the device was last started (Diagnostic) |
 | `button.<device_name>_reboot` | - | Reboot the device (Diagnostic) |
 
+The ringing, remote party, missed calls and voicemail waiting entities are only created if the phone answers the API endpoints they need when the integration starts.
+
 ### Actions
-- **`poly.reboot`**: Safely (after calls have completed) reboot a speakerphone. If you have more than one, choose which with `config_entry_id`:
 
-  ```yaml
-  action: poly.reboot
-  data:
-    config_entry_id: <pick the speakerphone in the action editor>
-  ```
+Every action takes an optional `config_entry_id` to choose the speakerphone; with a single speakerphone it can be left out.
 
-  With a single speakerphone, `config_entry_id` can be left out. The **Reboot** button entity does the same thing.
+- **`poly.dial`**: Call an extension, phone number or SIP address. Takes `number` and an optional `line` (defaults to line 1).
+- **`poly.answer_call`**: Answer the incoming call.
+- **`poly.reject_call`**: Reject the incoming call.
+- **`poly.end_call`**: Hang up the current call.
+- **`poly.reboot`**: Safely (after calls have completed) reboot a speakerphone. The **Reboot** button entity does the same thing.
+
+For example, to call the kitchen from the office speakerphone when a button is pressed:
+
+```yaml
+action: poly.dial
+data:
+  config_entry_id: <pick the office speakerphone in the action editor>
+  number: "1002"
+```
 
 ## Screenshot
 

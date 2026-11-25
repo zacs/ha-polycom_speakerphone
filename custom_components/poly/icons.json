@@ -12,6 +12,12 @@
       },
       "line_active": {
         "default": "mdi:phone-check"
+      },
+      "ringing": {
+        "default": "mdi:phone-ring"
+      },
+      "voicemail": {
+        "default": "mdi:voicemail"
       }
     },
     "sensor": {
@@ -44,6 +50,12 @@
       },
       "uptime": {
         "default": "mdi:clock-outline"
+      },
+      "remote_party": {
+        "default": "mdi:card-account-phone"
+      },
+      "missed_calls": {
+        "default": "mdi:phone-missed"
       }
     },
     "switch": {
@@ -55,6 +67,18 @@
   "services": {
     "reboot": {
       "service": "mdi:restart"
+    },
+    "dial": {
+      "service": "mdi:phone-dial"
+    },
+    "answer_call": {
+      "service": "mdi:phone-incoming"
+    },
+    "reject_call": {
+      "service": "mdi:phone-cancel"
+    },
+    "end_call": {
+      "service": "mdi:phone-hangup"
     }
   }
 }

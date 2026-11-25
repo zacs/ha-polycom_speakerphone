@@ -8,12 +8,23 @@ from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import device_mac_address
+from .api import active_call, device_mac_address
 from .const import ATTRIBUTION, DOMAIN
 from .coordinator import PolycomDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.helpers.entity import EntityDescription
+
+
+def current_call(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the phone's current call, from callStatus version 2 or else 1."""
+    calls = data.get("calls")
+    if isinstance(calls, list) and calls:
+        return active_call(calls)
+    call_status = data.get("call_status")
+    if isinstance(call_status, dict) and call_status.get("CallHandle"):
+        return call_status
+    return None
 
 
 def phone_muted(data: dict[str, Any]) -> bool | None:
