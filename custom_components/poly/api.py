@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 REQUEST_TIMEOUT = 10
 API_STATUS_OK = "2000"
+# callStatus answers this ("call does not exist") whenever the phone is idle
+API_STATUS_NO_CALL = "4007"
 
 
 class PolycomApiClientError(Exception):
@@ -41,17 +43,18 @@ def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
     response.raise_for_status()
 
 
-def _verify_status_or_raise(body: Any) -> None:
+def _verify_status_or_raise(body: Any, expected: frozenset[str]) -> None:
     """
-    Raise if the device reports a failure inside an HTTP 200 reply.
+    Raise if the device refused a request inside an HTTP 200 reply.
 
-    Poly phones answer most requests with HTTP 200 and put the outcome in a
-    "Status" field: "2000" is success, 4xxx/5xxx are errors (for example
-    callStatus returns "4007" when no call is active).
+    Poly phones answer with HTTP 200 and put the outcome in a "Status" field:
+    "2000" is success and 4xxx/5xxx mean the request wasn't carried out (for
+    example a mute command the phone rejects). Some of those codes are normal
+    answers for a particular endpoint, so callers say which they expect.
     """
     if isinstance(body, dict) and (status := body.get("Status")) not in (
         None,
-        API_STATUS_OK,
+        *expected,
     ):
         msg = f"Device returned status {status}"
         raise PolycomApiClientError(msg)
@@ -102,12 +105,13 @@ class PolycomApiClient:
         return response.get("data", {})
 
     async def async_get_call_status(self) -> dict[str, Any]:
-        """Get current call status."""
+        """Get current call status; empty while no call is active."""
         response = await self._api_wrapper(
             method="get",
             url=f"{self._base_url}/webCallControl/callStatus",
+            expected_statuses=frozenset({API_STATUS_OK, API_STATUS_NO_CALL}),
         )
-        # This endpoint may return an error status when no call is active
+        # Idle replies are {"Status": "4007", "Error": ""}, with no data
         return response.get("data", {})
 
     async def async_get_session_stats(self) -> Any:
@@ -196,6 +200,7 @@ class PolycomApiClient:
         method: str,
         url: str,
         data: dict | None = None,
+        expected_statuses: frozenset[str] = frozenset({API_STATUS_OK}),
     ) -> Any:
         """Make a request to the device and return the decoded JSON body."""
         try:
@@ -211,7 +216,7 @@ class PolycomApiClient:
             ):
                 _verify_response_or_raise(response)
                 body = await response.json()
-                _verify_status_or_raise(body)
+                _verify_status_or_raise(body, expected_statuses)
                 return body
 
         except PolycomApiClientError:
