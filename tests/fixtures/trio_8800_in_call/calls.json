@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "Remote Connection IP": "192.0.2.10",
+      "UIAppearanceIndex": "1*",
+      "LineID": "1",
+      "Media Direction": "sendrecv",
+      "CallHandle": "4a0ae008",
+      "RemotePartyName": "Office Speakerphone",
+      "DurationSeconds": "132",
+      "Type": "Outgoing",
+      "Muted": "0",
+      "RTCPPort": "2225",
+      "Ringing": "0",
+      "Protocol": "SIP",
+      "RTPPort": "2224",
+      "CallState": "Connected",
+      "StartTime": "2025-09-01T04:44:59",
+      "RemotePartyNumber": "sip:+1000@192.0.2.10",
+      "CallSequence": "1"
+    }
+  ],
+  "Status": "2000"
+}

@@ -1,8 +1,8 @@
 """
 Tests for call status, call logs and call control.
 
-No real phone has been captured during a call yet, so calls in progress use
-the shapes in Poly's REST API reference manual.
+Calls in progress use an anonymized capture from a real Trio 8800 during an
+outgoing call. No ringing call or command response has been captured yet.
 """
 
 from __future__ import annotations
@@ -17,9 +17,10 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.poly.const import DOMAIN
 
 from .conftest import (
-    CONNECTED_CALL,
+    IN_CALL,
     RawBody,
     get_entity_id,
+    load_data,
     mock_device,
     setup_entry,
 )
@@ -50,18 +51,34 @@ def posts(aioclient_mock: AiohttpClientMocker) -> list[tuple[str, object]]:
     ]
 
 
-async def test_connected_call(
+@pytest.mark.parametrize(
+    ("platform", "key", "expected"),
+    [
+        ("sensor", "phone_state", "Active"),
+        ("sensor", "call_duration", "132"),
+        ("sensor", "remote_party", "Office Speakerphone"),
+        ("sensor", "last_called_number", "1003"),
+        ("sensor", "missed_calls", "2"),
+        ("sensor", "last_call_time", STATE_UNKNOWN),
+        ("binary_sensor", "ringing", STATE_OFF),
+        ("binary_sensor", "line_active", STATE_ON),
+        ("binary_sensor", "mute_status", STATE_OFF),
+        ("switch", "mute", STATE_OFF),
+    ],
+)
+async def test_call_in_progress(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
+    platform: str,
+    key: str,
+    expected: str,
 ) -> None:
-    """A connected call reports who's on it and for how long."""
-    mock_device(aioclient_mock, calls=[CONNECTED_CALL])
+    """Entities during a real outgoing call on a Trio 8800."""
+    mock_device(aioclient_mock, capture=IN_CALL)
     await setup_entry(hass, mock_config_entry)
 
-    assert state(hass, mock_config_entry, "sensor", "remote_party") == "Test 1171"
-    assert state(hass, mock_config_entry, "sensor", "call_duration") == "25"
-    assert state(hass, mock_config_entry, "binary_sensor", "ringing") == STATE_OFF
+    assert state(hass, mock_config_entry, platform, key) == expected
 
 
 async def test_ringing_call(
@@ -69,13 +86,13 @@ async def test_ringing_call(
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """An incoming call that's ringing turns the ringing sensor on."""
-    ringing = {**CONNECTED_CALL, "CallState": "Offering", "Ringing": "1"}
-    mock_device(aioclient_mock, calls=[ringing])
+    """A call that's ringing turns the ringing sensor on."""
+    # No capture of a ringing call yet; assume only the Ringing flag differs
+    ringing = {**load_data("calls", IN_CALL)[0], "Ringing": "1"}
+    mock_device(aioclient_mock, capture=IN_CALL, calls=[ringing])
     await setup_entry(hass, mock_config_entry)
 
     assert state(hass, mock_config_entry, "binary_sensor", "ringing") == STATE_ON
-    assert state(hass, mock_config_entry, "sensor", "remote_party") == "Test 1171"
 
 
 async def test_call_falls_back_to_call_status_v1(
@@ -84,35 +101,14 @@ async def test_call_falls_back_to_call_status_v1(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Without callStatus version 2, the call comes from version 1."""
-    mock_device(
-        aioclient_mock,
-        calls=404,
-        call_status={
-            "CallHandle": "9577dd30",
-            "Type": "Incoming",
-            "Protocol": "SIP",
-            "CallState": "Connected",
-            "LineID": "1",
-            "RemotePartyName": "Kitchen",
-            "RemotePartyNumber": "sip:1002@192.0.2.10",
-            "DurationInSeconds": "7",
-        },
+    mock_device(aioclient_mock, capture=IN_CALL, calls=404)
+    await setup_entry(hass, mock_config_entry)
+
+    assert state(hass, mock_config_entry, "sensor", "call_duration") == "131"
+    assert (
+        state(hass, mock_config_entry, "sensor", "remote_party")
+        == "Office Speakerphone"
     )
-    await setup_entry(hass, mock_config_entry)
-
-    assert state(hass, mock_config_entry, "sensor", "call_duration") == "7"
-
-
-async def test_last_called_number_prefers_session_stats(
-    hass: HomeAssistant,
-    aioclient_mock: AiohttpClientMocker,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """If session stats carry a last called number, it wins over the call log."""
-    mock_device(aioclient_mock, session_stats={"LastCalledNumber": "5551234"})
-    await setup_entry(hass, mock_config_entry)
-
-    assert state(hass, mock_config_entry, "sensor", "last_called_number") == "5551234"
 
 
 @pytest.mark.parametrize("casing", [str.lower, str.title])
@@ -148,6 +144,7 @@ async def test_unsupported_endpoints_add_no_entities(
     mock_device(
         aioclient_mock,
         calls=404,
+        call_status=404,
         call_logs=RawBody({"Status": "4004"}),
     )
     await setup_entry(hass, mock_config_entry)
@@ -203,9 +200,10 @@ async def test_call_actions(
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"calls": [CONNECTED_CALL]},
-        # Without callStatus version 2, the handle comes from version 1
-        {"calls": 404, "call_status": {"CallHandle": "b5576ff8"}},
+        {},
+        # Without callStatus version 2, the handle comes from version 1, which
+        # writes it as "0x4a0ae008"
+        {"calls": 404},
     ],
 )
 async def test_end_call(
@@ -214,14 +212,14 @@ async def test_end_call(
     init_integration: MockConfigEntry,
     overrides: dict[str, object],
 ) -> None:
-    """Ending a call hangs up the current call by its handle."""
+    """Ending a call hangs up the current call by its version 2 handle."""
     aioclient_mock.clear_requests()
-    mock_device(aioclient_mock, **overrides)
+    mock_device(aioclient_mock, capture=IN_CALL, **overrides)
 
     await hass.services.async_call(DOMAIN, "end_call", {}, blocking=True)
 
     assert posts(aioclient_mock) == [
-        ("/api/v1/callctrl/endCall", {"data": {"Ref": "b5576ff8"}})
+        ("/api/v1/callctrl/endCall", {"data": {"Ref": "4a0ae008"}})
     ]
 
 

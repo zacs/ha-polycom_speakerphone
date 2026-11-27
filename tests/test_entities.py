@@ -45,7 +45,7 @@ async def poll(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
         # 284389376 of 519995392 bytes; "Used" includes the page cache
         ("sensor", "memory_usage", "54.7"),
         ("sensor", "memory_total", "495.9"),
-        # sessionStats is an empty list while idle, so this comes from the log
+        # The newest placed call in the call log
         ("sensor", "last_called_number", "2025550123"),
         ("sensor", "missed_calls", "2"),
         ("sensor", "remote_party", STATE_UNKNOWN),
@@ -160,7 +160,6 @@ async def test_optional_endpoints_unavailable(
         call_status=404,
         device_stats=404,
         line_info=404,
-        session_stats=404,
         communication_info=404,
     )
     await setup_entry(hass, mock_config_entry)

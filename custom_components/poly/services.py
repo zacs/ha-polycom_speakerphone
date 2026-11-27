@@ -111,7 +111,9 @@ async def _async_active_call_handle(entry: PolycomConfigEntry) -> str:
             translation_key="no_active_call",
             translation_placeholders={"title": entry.title},
         )
-    return str(call["CallHandle"])
+    # callStatus version 1 writes the handle as "0x4a0ae008"; version 2, which
+    # the manual says endCall takes, writes it as "4a0ae008"
+    return str(call["CallHandle"]).removeprefix("0x")
 
 
 @callback

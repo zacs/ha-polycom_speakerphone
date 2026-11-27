@@ -1,0 +1,13 @@
+{
+  "data": {
+    "RemotePartyName": "Office Speakerphone",
+    "CallHandle": "0x4a0ae008",
+    "Type": "Outgoing",
+    "RemotePartyNumber": "sip:+1000@192.0.2.10",
+    "Protocol": "Sip",
+    "CallState": "Connected",
+    "LineId": "1",
+    "DurationInSeconds": "131"
+  },
+  "Status": "2000"
+}
