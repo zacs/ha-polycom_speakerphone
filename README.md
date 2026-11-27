@@ -129,6 +129,10 @@ This integration uses the Polycom Voice REST API. For more information, see:
 
 ## Troubleshooting
 
+### HACS can't find `custom_components/polycom_speakerphone/manifest.json`
+
+Before 0.2.0 the integration's folder in this repository was named `polycom_speakerphone`; it's now `poly`. HACS remembers the old folder until Home Assistant restarts, so updating from 0.1.x can fail with `No manifest.json file found 'custom_components/polycom_speakerphone/manifest.json'`. Restart Home Assistant and download the update again. If it still fails, remove the repository in HACS, add it again and download it; your speakerphones' settings and entities are kept.
+
 ### Connection Issues
 - Confirm connectivity and credentials by visiting `https://<YOUR_IP>/api/v2/mgmt/device/info` with username `Polycom` and your admin password. You should see a JSON blob of device details. 
 - Ensure the device IP address is correct 
