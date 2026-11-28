@@ -137,19 +137,35 @@ async def _async_send(
         ) from exception
 
 
-async def _async_active_call_handle(
-    hass: HomeAssistant, entry: PolycomConfigEntry
+def _is_ringing(call: dict[str, Any]) -> bool:
+    """Return whether a call is an incoming call that's still ringing."""
+    # callStatus version 2 has a Ringing flag; version 1 only the "Offering" state
+    return call.get("Ringing") == "1" or call.get("CallState") == "Offering"
+
+
+async def _async_call_handle(
+    hass: HomeAssistant, entry: PolycomConfigEntry, *, ringing: bool
 ) -> str:
-    """Look up the handle of the phone's current call, as it is right now."""
+    """
+    Look up a call's handle on the phone, as it is right now.
+
+    With ringing, the incoming call that's ringing; otherwise the current call.
+    """
     client = entry.runtime_data.client
     try:
         try:
-            call = active_call(await client.async_get_calls())
+            calls = await client.async_get_calls()
         except PolycomApiClientError:
-            call = None
+            calls = []
+        if ringing:
+            call = next((call for call in calls if _is_ringing(call)), None)
+        else:
+            call = active_call(calls)
         # Fall back to the older callStatus, which reports a single call
-        if call is None:
+        if call is None and not calls:
             call = await client.async_get_call_status() or None
+            if call is not None and ringing and not _is_ringing(call):
+                call = None
     except PolycomApiClientError as exception:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -162,11 +178,11 @@ async def _async_active_call_handle(
     if call is None or not call.get("CallHandle"):
         raise ServiceValidationError(
             translation_domain=DOMAIN,
-            translation_key="no_active_call",
+            translation_key="no_ringing_call" if ringing else "no_active_call",
             translation_placeholders={"name": _phone_name(hass, entry)},
         )
     # callStatus version 1 writes the handle as "0x4a0ae008"; version 2, which
-    # the manual says endCall takes, writes it as "4a0ae008"
+    # the manual says the call commands take, writes it as "4a0ae008"
     return str(call["CallHandle"]).removeprefix("0x")
 
 
@@ -201,13 +217,20 @@ def async_setup_services(hass: HomeAssistant) -> None:
     async def async_reject_call(call: ServiceCall) -> None:
         """Reject phones' incoming calls."""
         for entry in await _async_get_entries(hass, call):
-            await _async_send(hass, entry, lambda client: client.async_reject_call())
+            # Without the call's handle the phone answers 4003 "Operation not
+            # allowed" (seen on a Trio 8800)
+            handle = await _async_call_handle(hass, entry, ringing=True)
+            await _async_send(
+                hass,
+                entry,
+                lambda client, handle=handle: client.async_reject_call(handle),
+            )
             await entry.runtime_data.coordinator.async_request_refresh()
 
     async def async_end_call(call: ServiceCall) -> None:
         """Hang up phones' current calls."""
         for entry in await _async_get_entries(hass, call):
-            handle = await _async_active_call_handle(hass, entry)
+            handle = await _async_call_handle(hass, entry, ringing=False)
             await _async_send(
                 hass,
                 entry,

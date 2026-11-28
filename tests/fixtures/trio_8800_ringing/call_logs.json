@@ -1,0 +1,60 @@
+{
+  "data": {
+    "Missed": [
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-05-10T18:40:25",
+        "RemotePartyName": "Garage Speakerphone",
+        "RemotePartyNumber": "sip:+1000@example.com",
+        "Duration": ""
+      },
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-08-03T10:35:57",
+        "RemotePartyName": "Kitchen Phone",
+        "RemotePartyNumber": "sip:1002@example.com",
+        "Duration": ""
+      }
+    ],
+    "Placed": [
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-05-09T10:31:54",
+        "RemotePartyName": "2025550123",
+        "RemotePartyNumber": "2025550123",
+        "Duration": ""
+      },
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-09-01T04:44:48",
+        "RemotePartyName": "1003",
+        "RemotePartyNumber": "1003",
+        "Duration": ""
+      },
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-09-01T04:44:59",
+        "RemotePartyName": "1002",
+        "RemotePartyNumber": "sip:1002@example.com",
+        "Duration": "27 mins 55 secs"
+      },
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-09-01T05:15:11",
+        "RemotePartyName": "1003",
+        "RemotePartyNumber": "1003",
+        "Duration": ""
+      }
+    ],
+    "Received": [
+      {
+        "LineNumber": "1",
+        "StartTime": "2025-09-01T05:42:37",
+        "RemotePartyName": "Kitchen Phone",
+        "RemotePartyNumber": "sip:1002@example.com",
+        "Duration": "53 secs"
+      }
+    ]
+  },
+  "Status": "2000"
+}

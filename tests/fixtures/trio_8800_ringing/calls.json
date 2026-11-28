@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "Media Direction": "sendonly",
+      "CallHandle": "41d9d008",
+      "LineID": "1",
+      "CallSequence": "1",
+      "Remote Connection IP": "",
+      "Type": "Incoming",
+      "RemotePartyNumber": "sip:1002@example.com",
+      "Ringing": "1",
+      "Muted": "0",
+      "Protocol": "SIP",
+      "StartTime": "2025-09-01T05:44:15",
+      "CallState": "Offering",
+      "RemotePartyName": "Kitchen Phone",
+      "UIAppearanceIndex": "1*",
+      "DurationSeconds": "0",
+      "RTPPort": "0",
+      "RTCPPort": "1"
+    }
+  ],
+  "Status": "2000"
+}

@@ -18,9 +18,9 @@ from custom_components.poly.const import DOMAIN
 
 from .conftest import (
     IN_CALL,
+    RINGING,
     RawBody,
     get_entity_id,
-    load_data,
     mock_device,
     setup_entry,
 )
@@ -81,18 +81,43 @@ async def test_call_in_progress(
     assert state(hass, mock_config_entry, platform, key) == expected
 
 
+@pytest.mark.parametrize(
+    ("platform", "key", "expected"),
+    [
+        ("binary_sensor", "ringing", STATE_ON),
+        ("sensor", "remote_party", "Kitchen Phone"),
+        ("sensor", "call_duration", "0"),
+        # pollForStatus keeps reporting Idle while a call rings
+        ("sensor", "phone_state", "Idle"),
+        ("binary_sensor", "line_active", STATE_ON),
+    ],
+)
 async def test_ringing_call(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     mock_config_entry: MockConfigEntry,
+    platform: str,
+    key: str,
+    expected: str,
 ) -> None:
-    """A call that's ringing turns the ringing sensor on."""
-    # No capture of a ringing call yet; assume only the Ringing flag differs
-    ringing = {**load_data("calls", IN_CALL)[0], "Ringing": "1"}
-    mock_device(aioclient_mock, capture=IN_CALL, calls=[ringing])
+    """Entities while an incoming call rings on a real Trio 8800."""
+    mock_device(aioclient_mock, capture=RINGING)
     await setup_entry(hass, mock_config_entry)
 
-    assert state(hass, mock_config_entry, "binary_sensor", "ringing") == STATE_ON
+    assert state(hass, mock_config_entry, platform, key) == expected
+
+
+async def test_ringing_call_status_v1_duration(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """CallStatus version 1's duration of -1 while ringing isn't shown."""
+    mock_device(aioclient_mock, capture=RINGING, calls=404)
+    await setup_entry(hass, mock_config_entry)
+
+    assert state(hass, mock_config_entry, "sensor", "call_duration") == STATE_UNKNOWN
+    assert state(hass, mock_config_entry, "sensor", "remote_party") == "Kitchen Phone"
 
 
 async def test_call_falls_back_to_call_status_v1(
@@ -195,7 +220,6 @@ async def test_unsupported_endpoints_add_no_entities(
             ),
         ),
         ("answer_call", {}, ("/api/v1/callctrl/answerCall", None)),
-        ("reject_call", {}, ("/api/v1/callctrl/rejectCall", None)),
     ],
 )
 async def test_call_actions(
@@ -266,3 +290,44 @@ async def test_dial_refused(
         await hass.services.async_call(
             DOMAIN, "dial", {"number": "1002"}, blocking=True
         )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},
+        # Without callStatus version 2, version 1 says "Offering" instead
+        {"calls": 404},
+    ],
+)
+async def test_reject_call(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    init_integration: MockConfigEntry,
+    overrides: dict[str, object],
+) -> None:
+    """Rejecting sends the ringing call's handle; without it the phone refuses."""
+    aioclient_mock.clear_requests()
+    mock_device(aioclient_mock, capture=RINGING, **overrides)
+
+    await hass.services.async_call(DOMAIN, "reject_call", {}, blocking=True)
+
+    assert posts(aioclient_mock) == [
+        ("/api/v1/callctrl/rejectCall", {"data": {"Ref": "41d9d008"}})
+    ]
+
+
+@pytest.mark.parametrize("capture", [IN_CALL, "trio_8800_idle"])
+async def test_reject_call_without_a_ringing_call(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    init_integration: MockConfigEntry,
+    capture: str,
+) -> None:
+    """Rejecting when nothing is ringing is an error, and sends nothing."""
+    aioclient_mock.clear_requests()
+    mock_device(aioclient_mock, capture=capture)
+
+    with pytest.raises(ServiceValidationError, match="has no incoming call to reject"):
+        await hass.services.async_call(DOMAIN, "reject_call", {}, blocking=True)
+    assert posts(aioclient_mock) == []

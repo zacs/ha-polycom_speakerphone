@@ -42,7 +42,20 @@ extension too). It shows:
   `line_info`'s `CallAppearances`) as `4a0ae008`.
 - `call_logs` appends the new call to the end of `Placed`.
 
-There are no captures yet of a ringing call, of a muted call, or of the
-responses to commands (mute, reboot, dial, answer, reject, end call).
+## `trio_8800_ringing/`
+
+The same phone while an incoming call rings, anonymized the same way. It
+shows:
+
+- `poll_status` still reports `"State": "Idle"`.
+- `calls` (version 2) has `"Ringing": "1"` and `"CallState": "Offering"`;
+  `call_status` (version 1) has the same state and `"DurationInSeconds": "-1"`.
+- `call_logs` durations are text such as `"27 mins 55 secs"`.
+
+Rejecting a ringing call without its handle failed on this phone with status
+4003 ("Operation not allowed"), so the integration sends the handle.
+
+There are no captures yet of a muted call, or of the responses to commands
+(mute, reboot, dial, answer, reject, end call).
 `scripts/capture` prints a phone's responses for every endpoint the
 integration reads.

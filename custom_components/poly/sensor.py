@@ -93,9 +93,11 @@ def _call_duration(data: dict[str, Any]) -> int | None:
     # The manual's examples use both spellings
     duration = call.get("DurationSeconds", call.get("DurationInSeconds"))
     try:
-        return int(duration)
+        seconds = int(duration)
     except (TypeError, ValueError):
         return None
+    # callStatus version 1 reports -1 while the call is still ringing
+    return seconds if seconds >= 0 else None
 
 
 def _remote_party(data: dict[str, Any]) -> str | None:

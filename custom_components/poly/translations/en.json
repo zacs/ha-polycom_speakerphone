@@ -143,6 +143,9 @@
     },
     "not_a_speakerphone": {
       "message": "The chosen device isn't a Polycom speakerphone."
+    },
+    "no_ringing_call": {
+      "message": "The speakerphone {name} has no incoming call to reject."
     }
   },
   "services": {

@@ -261,10 +261,12 @@ class PolycomApiClient:
             method="post", url=f"{self._base_url}/callctrl/answerCall"
         )
 
-    async def async_reject_call(self) -> None:
-        """Reject the incoming call."""
+    async def async_reject_call(self, call_handle: str) -> None:
+        """Reject an incoming call, identified by its handle from callStatus."""
         await self._api_wrapper(
-            method="post", url=f"{self._base_url}/callctrl/rejectCall"
+            method="post",
+            url=f"{self._base_url}/callctrl/rejectCall",
+            data={"data": {"Ref": call_handle}},
         )
 
     async def async_end_call(self, call_handle: str) -> None:

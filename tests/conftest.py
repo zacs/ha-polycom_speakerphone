@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 FIXTURES = Path(__file__).parent / "fixtures"
 IDLE = "trio_8800_idle"
 IN_CALL = "trio_8800_in_call"
+RINGING = "trio_8800_ringing"
 
 HOST = "192.168.1.50"
 PASSWORD = "secret"  # noqa: S105
