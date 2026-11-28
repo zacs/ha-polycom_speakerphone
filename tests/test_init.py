@@ -9,7 +9,6 @@ from aiohttp import ClientError
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_VERIFY_SSL
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -272,7 +271,7 @@ async def test_actions_target_devices(
     await hass.services.async_call(
         DOMAIN,
         "reboot",
-        target={"device_id": _device_id(hass, second)},
+        {"device_id": _device_id(hass, second)},
         blocking=True,
     )
     assert reboot_calls(aioclient_mock) == [f"https://10.0.0.2{REBOOT_PATH}"]
@@ -281,29 +280,13 @@ async def test_actions_target_devices(
     await hass.services.async_call(
         DOMAIN,
         "reboot",
-        target={"device_id": [_device_id(hass, first), _device_id(hass, second)]},
+        {"device_id": [_device_id(hass, first), _device_id(hass, second)]},
         blocking=True,
     )
     assert sorted(reboot_calls(aioclient_mock)) == [
         f"https://10.0.0.1{REBOOT_PATH}",
         f"https://10.0.0.2{REBOOT_PATH}",
     ]
-
-
-async def test_actions_target_areas(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
-    """Targeting an area acts on the phones in it."""
-    _, second = await _setup_two_devices(hass, aioclient_mock)
-    gym = ar.async_get(hass).async_create("Gym")
-    dr.async_get(hass).async_update_device(_device_id(hass, second), area_id=gym.id)
-    aioclient_mock.mock_calls.clear()
-
-    await hass.services.async_call(
-        DOMAIN, "reboot", target={"area_id": gym.id}, blocking=True
-    )
-
-    assert reboot_calls(aioclient_mock) == [f"https://10.0.0.2{REBOOT_PATH}"]
 
 
 async def test_actions_reject_other_devices(
@@ -319,9 +302,9 @@ async def test_actions_reject_other_devices(
     )
     aioclient_mock.mock_calls.clear()
 
-    with pytest.raises(ServiceValidationError, match="None of the chosen devices"):
+    with pytest.raises(ServiceValidationError, match="isn't a Polycom speakerphone"):
         await hass.services.async_call(
-            DOMAIN, "reboot", target={"device_id": other.id}, blocking=True
+            DOMAIN, "reboot", {"device_id": other.id}, blocking=True
         )
     assert reboot_calls(aioclient_mock) == []
 
@@ -336,5 +319,5 @@ async def test_errors_name_the_device(
 
     with pytest.raises(ServiceValidationError, match="Gym phone has no call to end"):
         await hass.services.async_call(
-            DOMAIN, "end_call", target={"device_id": device_id}, blocking=True
+            DOMAIN, "end_call", {"device_id": device_id}, blocking=True
         )

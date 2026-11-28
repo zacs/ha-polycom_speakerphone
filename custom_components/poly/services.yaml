@@ -1,11 +1,14 @@
 reboot:
-  target: &speakerphone
-    device:
-      integration: poly
+  fields:
+    device_id: &device_id
+      required: false
+      selector:
+        device:
+          integration: poly
 
 dial:
-  target: *speakerphone
   fields:
+    device_id: *device_id
     number:
       required: true
       example: "1002"
@@ -20,10 +23,13 @@ dial:
           mode: box
 
 answer_call:
-  target: *speakerphone
+  fields:
+    device_id: *device_id
 
 reject_call:
-  target: *speakerphone
+  fields:
+    device_id: *device_id
 
 end_call:
-  target: *speakerphone
+  fields:
+    device_id: *device_id

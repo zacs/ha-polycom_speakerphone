@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import inspect
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import service as service_helper
 
 from .api import PolycomApiClientError, active_call
 from .const import (
@@ -33,23 +32,19 @@ if TYPE_CHECKING:
     from .api import PolycomApiClient
     from .data import PolycomConfigEntry
 
-# Phones are chosen by device (or anything that contains devices, like an
-# area). config_entry_id is still accepted for automations written for 0.2.0.
-PHONE_SCHEMA = vol.Schema({vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string}).extend(
-    cv.TARGET_SERVICE_FIELDS
+# Phones are chosen by device. config_entry_id is still accepted for
+# automations written for 0.2.0.
+PHONE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
 )
 DIAL_SCHEMA = PHONE_SCHEMA.extend(
     {
         vol.Required(ATTR_NUMBER): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional(ATTR_LINE): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
-)
-TARGET_KEYS = frozenset(str(key) for key in cv.TARGET_SERVICE_FIELDS)
-
-# Home Assistant 2026 dropped this helper's hass argument
-_EXTRACT_TAKES_HASS = (
-    "hass"
-    in inspect.signature(service_helper.async_extract_config_entry_ids).parameters
 )
 
 
@@ -77,8 +72,8 @@ async def _async_get_entries(
     """
     Return the loaded phones an action call refers to.
 
-    The phones may be targeted as devices (or areas and the like), given by
-    config_entry_id, or left out when only one phone is set up.
+    The phones may be chosen as devices, given by config_entry_id, or left
+    out when only one phone is set up.
     """
     if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is not None:
         entry = hass.config_entries.async_get_entry(entry_id)
@@ -91,23 +86,27 @@ async def _async_get_entries(
         _ensure_loaded(hass, entry)
         return [entry]
 
-    if TARGET_KEYS & call.data.keys():
-        if _EXTRACT_TAKES_HASS:
-            entry_ids = await service_helper.async_extract_config_entry_ids(hass, call)
-        else:
-            entry_ids = await service_helper.async_extract_config_entry_ids(call)
-        entries = [
-            entry
-            for entry_id in sorted(entry_ids)
-            if (entry := hass.config_entries.async_get_entry(entry_id)) is not None
-            and entry.domain == DOMAIN
-        ]
-        if not entries:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="no_targeted_phone"
+    if device_ids := call.data.get(ATTR_DEVICE_ID):
+        device_registry = dr.async_get(hass)
+        entries: list[PolycomConfigEntry] = []
+        for device_id in device_ids:
+            device = device_registry.async_get(device_id)
+            entry = next(
+                (
+                    entry
+                    for entry_id in (device.config_entries if device else ())
+                    if (entry := hass.config_entries.async_get_entry(entry_id))
+                    and entry.domain == DOMAIN
+                ),
+                None,
             )
-        for entry in entries:
+            if entry is None:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="not_a_speakerphone"
+                )
             _ensure_loaded(hass, entry)
+            if entry not in entries:
+                entries.append(entry)
         return entries
 
     loaded = hass.config_entries.async_loaded_entries(DOMAIN)
