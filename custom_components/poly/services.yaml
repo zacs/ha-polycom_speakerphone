@@ -1,14 +1,11 @@
 reboot:
-  fields:
-    config_entry_id: &config_entry_id
-      required: false
-      selector:
-        config_entry:
-          integration: poly
+  target: &speakerphone
+    device:
+      integration: poly
 
 dial:
+  target: *speakerphone
   fields:
-    config_entry_id: *config_entry_id
     number:
       required: true
       example: "1002"
@@ -23,13 +20,10 @@ dial:
           mode: box
 
 answer_call:
-  fields:
-    config_entry_id: *config_entry_id
+  target: *speakerphone
 
 reject_call:
-  fields:
-    config_entry_id: *config_entry_id
+  target: *speakerphone
 
 end_call:
-  fields:
-    config_entry_id: *config_entry_id
+  target: *speakerphone

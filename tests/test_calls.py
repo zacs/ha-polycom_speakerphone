@@ -177,6 +177,23 @@ async def test_unsupported_endpoints_add_no_entities(
             {"number": "1002", "line": 2},
             ("/api/v1/callctrl/dial", {"data": {"Dest": "1002", "Line": "2"}}),
         ),
+        # SIP addresses are dialed as SIP, without the scheme (manual's example)
+        (
+            "dial",
+            {"number": "sip:1002@example.com"},
+            (
+                "/api/v1/callctrl/dial",
+                {"data": {"Dest": "1002@example.com", "Type": "SIP"}},
+            ),
+        ),
+        (
+            "dial",
+            {"number": "1002@example.com"},
+            (
+                "/api/v1/callctrl/dial",
+                {"data": {"Dest": "1002@example.com", "Type": "SIP"}},
+            ),
+        ),
         ("answer_call", {}, ("/api/v1/callctrl/answerCall", None)),
         ("reject_call", {}, ("/api/v1/callctrl/rejectCall", None)),
     ],

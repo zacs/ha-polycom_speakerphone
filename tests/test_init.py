@@ -9,6 +9,8 @@ from aiohttp import ClientError
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_VERIFY_SSL
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -157,7 +159,7 @@ async def test_reboot_service_requires_target_with_several_devices(
     await _setup_two_devices(hass, aioclient_mock)
     aioclient_mock.mock_calls.clear()
 
-    with pytest.raises(ServiceValidationError, match="choose which one to use"):
+    with pytest.raises(ServiceValidationError, match="choose which to use"):
         await hass.services.async_call(DOMAIN, "reboot", {}, blocking=True)
     assert reboot_calls(aioclient_mock) == []
 
@@ -253,3 +255,86 @@ async def test_entity_actions_report_device_errors(
             await hass.services.async_call(
                 domain, service, {"entity_id": entity_id}, blocking=True
             )
+
+
+def _device_id(hass: HomeAssistant, entry: MockConfigEntry) -> str:
+    """Return the ID of a phone's device."""
+    return dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)[0].id
+
+
+async def test_actions_target_devices(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Actions act on the targeted devices, one or several."""
+    first, second = await _setup_two_devices(hass, aioclient_mock)
+
+    aioclient_mock.mock_calls.clear()
+    await hass.services.async_call(
+        DOMAIN,
+        "reboot",
+        target={"device_id": _device_id(hass, second)},
+        blocking=True,
+    )
+    assert reboot_calls(aioclient_mock) == [f"https://10.0.0.2{REBOOT_PATH}"]
+
+    aioclient_mock.mock_calls.clear()
+    await hass.services.async_call(
+        DOMAIN,
+        "reboot",
+        target={"device_id": [_device_id(hass, first), _device_id(hass, second)]},
+        blocking=True,
+    )
+    assert sorted(reboot_calls(aioclient_mock)) == [
+        f"https://10.0.0.1{REBOOT_PATH}",
+        f"https://10.0.0.2{REBOOT_PATH}",
+    ]
+
+
+async def test_actions_target_areas(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Targeting an area acts on the phones in it."""
+    _, second = await _setup_two_devices(hass, aioclient_mock)
+    gym = ar.async_get(hass).async_create("Gym")
+    dr.async_get(hass).async_update_device(_device_id(hass, second), area_id=gym.id)
+    aioclient_mock.mock_calls.clear()
+
+    await hass.services.async_call(
+        DOMAIN, "reboot", target={"area_id": gym.id}, blocking=True
+    )
+
+    assert reboot_calls(aioclient_mock) == [f"https://10.0.0.2{REBOOT_PATH}"]
+
+
+async def test_actions_reject_other_devices(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Targeting a device that isn't a Polycom phone is an error."""
+    other_entry = MockConfigEntry(domain="other")
+    other_entry.add_to_hass(hass)
+    other = dr.async_get(hass).async_get_or_create(
+        config_entry_id=other_entry.entry_id, identifiers={("other", "1")}
+    )
+    aioclient_mock.mock_calls.clear()
+
+    with pytest.raises(ServiceValidationError, match="None of the chosen devices"):
+        await hass.services.async_call(
+            DOMAIN, "reboot", target={"device_id": other.id}, blocking=True
+        )
+    assert reboot_calls(aioclient_mock) == []
+
+
+async def test_errors_name_the_device(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Errors use the name the user gave the phone's device."""
+    device_id = _device_id(hass, init_integration)
+    dr.async_get(hass).async_update_device(device_id, name_by_user="Gym phone")
+
+    with pytest.raises(ServiceValidationError, match="Gym phone has no call to end"):
+        await hass.services.async_call(
+            DOMAIN, "end_call", target={"device_id": device_id}, blocking=True
+        )

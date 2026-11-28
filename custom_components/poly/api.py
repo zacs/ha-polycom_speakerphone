@@ -242,6 +242,11 @@ class PolycomApiClient:
     async def async_dial(self, number: str, line: int | None = None) -> None:
         """Call a number or SIP URI, on line 1 unless another is given."""
         call: dict[str, str] = {"Dest": number}
+        # The phone dials as a phone number ("TEL") unless told otherwise. The
+        # manual's SIP example gives the address without the "sip:" scheme.
+        if number.lower().startswith("sip:") or "@" in number:
+            call = {"Dest": number.removeprefix("sip:").removeprefix("SIP:")}
+            call["Type"] = "SIP"
         if line is not None:
             call["Line"] = str(line)
         await self._api_wrapper(

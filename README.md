@@ -43,7 +43,7 @@ The ringing, remote party and missed calls entities are only created if the phon
 
 ### Actions
 
-Every action takes an optional `config_entry_id` to choose the speakerphone; with a single speakerphone it can be left out.
+Every action targets one or more speakerphone devices, or an area to act on the speakerphones in it. With a single speakerphone the target can be left out.
 
 - **`poly.dial`**: Call an extension, phone number or SIP address. Takes `number` and an optional `line` (defaults to line 1).
 - **`poly.answer_call`**: Answer the incoming call.
@@ -55,10 +55,13 @@ For example, to call the kitchen from the office speakerphone when a button is p
 
 ```yaml
 action: poly.dial
+target:
+  device_id: <pick the office speakerphone in the action editor>
 data:
-  config_entry_id: <pick the office speakerphone in the action editor>
   number: "1002"
 ```
+
+Automations written for 0.2.0 that choose the speakerphone with `config_entry_id` keep working.
 
 ## Screenshot
 
