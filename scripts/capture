@@ -27,7 +27,6 @@ endpoints=(
     v1/webCallControl/callStatus
     v1/mgmt/device/stats
     v2/mgmt/lineInfo
-    v1/mgmt/media/sessionStats
     v1/mgmt/media/communicationInfo
     # Calls and call logs
     v2/webCallControl/callStatus

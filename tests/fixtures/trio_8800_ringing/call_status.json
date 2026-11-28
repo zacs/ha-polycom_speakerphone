@@ -1,0 +1,13 @@
+{
+  "data": {
+    "CallHandle": "0x41d9d008",
+    "Type": "Incoming",
+    "Protocol": "Sip",
+    "DurationInSeconds": "-1",
+    "LineId": "1",
+    "CallState": "Offering",
+    "RemotePartyName": "Kitchen Phone",
+    "RemotePartyNumber": "sip:1002@example.com"
+  },
+  "Status": "2000"
+}

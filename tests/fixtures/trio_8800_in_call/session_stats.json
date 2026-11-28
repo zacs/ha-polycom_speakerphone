@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "Streams": [
+        {
+          "TxCodec": "0:G.711 µ-Law",
+          "Ref": "0x41b1ad0",
+          "TxPayloadSize": "20",
+          "Category": "0:Voice",
+          "PacketsSent": "6966",
+          "PacketsExpected": "6953",
+          "OctetsSent": "1114560",
+          "Jitter": "0",
+          "RxCodec": "0:G.711 µ-Law",
+          "PacketsReceived": "6953",
+          "Latency": "0",
+          "OctetsReceived": "1112480",
+          "MaxJitter": "2",
+          "PacketsLost": "0",
+          "RxPayloadSize": "160",
+          "RxMOSCQ": "127.0",
+          "RxMOSLQ": "127.0",
+          "TxMOSCQ": "4.1",
+          "TxMOSLQ": "4.1"
+        }
+      ],
+      "Ref": "0x4a0ae008",
+      "SRTPCall": "False",
+      "H235Call": "False"
+    }
+  ],
+  "Status": "2000"
+}

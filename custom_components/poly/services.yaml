@@ -1,14 +1,14 @@
 reboot:
   fields:
-    config_entry_id: &config_entry_id
+    device_id: &device_id
       required: false
       selector:
-        config_entry:
+        device:
           integration: poly
 
 dial:
   fields:
-    config_entry_id: *config_entry_id
+    device_id: *device_id
     number:
       required: true
       example: "1002"
@@ -24,12 +24,12 @@ dial:
 
 answer_call:
   fields:
-    config_entry_id: *config_entry_id
+    device_id: *device_id
 
 reject_call:
   fields:
-    config_entry_id: *config_entry_id
+    device_id: *device_id
 
 end_call:
   fields:
-    config_entry_id: *config_entry_id
+    device_id: *device_id

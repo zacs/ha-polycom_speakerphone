@@ -1,0 +1,11 @@
+{
+  "data": {
+    "CommunicationType": [
+      "RxTx",
+      "None"
+    ],
+    "FarEndMuteState": [],
+    "PhoneMuteState": "False"
+  },
+  "Status": "2000"
+}

@@ -185,14 +185,6 @@ class PolycomApiClient:
         )
         return response.get("data", {})
 
-    async def async_get_session_stats(self) -> Any:
-        """Get media session statistics (an empty list while idle)."""
-        response = await self._api_wrapper(
-            method="get",
-            url=f"{self._base_url}/mgmt/media/sessionStats",
-        )
-        return response.get("data", {})
-
     async def async_get_line_info(self) -> list[dict[str, Any]]:
         """Get line registration information."""
         response = await self._api_wrapper(
@@ -250,6 +242,11 @@ class PolycomApiClient:
     async def async_dial(self, number: str, line: int | None = None) -> None:
         """Call a number or SIP URI, on line 1 unless another is given."""
         call: dict[str, str] = {"Dest": number}
+        # The phone dials as a phone number ("TEL") unless told otherwise. The
+        # manual's SIP example gives the address without the "sip:" scheme.
+        if number.lower().startswith("sip:") or "@" in number:
+            call = {"Dest": number.removeprefix("sip:").removeprefix("SIP:")}
+            call["Type"] = "SIP"
         if line is not None:
             call["Line"] = str(line)
         await self._api_wrapper(
@@ -264,10 +261,12 @@ class PolycomApiClient:
             method="post", url=f"{self._base_url}/callctrl/answerCall"
         )
 
-    async def async_reject_call(self) -> None:
-        """Reject the incoming call."""
+    async def async_reject_call(self, call_handle: str) -> None:
+        """Reject an incoming call, identified by its handle from callStatus."""
         await self._api_wrapper(
-            method="post", url=f"{self._base_url}/callctrl/rejectCall"
+            method="post",
+            url=f"{self._base_url}/callctrl/rejectCall",
+            data={"data": {"Ref": call_handle}},
         )
 
     async def async_end_call(self, call_handle: str) -> None:
@@ -296,7 +295,6 @@ class PolycomApiClient:
             "call_logs": self.async_get_call_logs,
             "device_stats": self.async_get_device_stats,
             "line_info": self.async_get_line_info,
-            "session_stats": self.async_get_session_stats,
             "communication_info": self.async_get_communication_info,
         }
         data: dict[str, Any] = {"device_info": device_info}

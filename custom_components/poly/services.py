@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 
 from .api import PolycomApiClientError, active_call
 from .const import (
@@ -30,7 +32,14 @@ if TYPE_CHECKING:
     from .api import PolycomApiClient
     from .data import PolycomConfigEntry
 
-PHONE_SCHEMA = vol.Schema({vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string})
+# Phones are chosen by device. config_entry_id is still accepted for
+# automations written for 0.2.0.
+PHONE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
+)
 DIAL_SCHEMA = PHONE_SCHEMA.extend(
     {
         vol.Required(ATTR_NUMBER): vol.All(cv.string, vol.Length(min=1)),
@@ -39,43 +48,80 @@ DIAL_SCHEMA = PHONE_SCHEMA.extend(
 )
 
 
-@callback
-def _async_get_entry(hass: HomeAssistant, call: ServiceCall) -> PolycomConfigEntry:
-    """
-    Return the loaded phone an action call refers to.
+def _phone_name(hass: HomeAssistant, entry: PolycomConfigEntry) -> str:
+    """Return the phone's device name as the user knows it."""
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    if devices:
+        return devices[0].name_by_user or devices[0].name or entry.title
+    return entry.title
 
-    The target may be omitted when only one phone is set up, so automations
-    written before the target existed keep working.
-    """
-    if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is None:
-        loaded = hass.config_entries.async_loaded_entries(DOMAIN)
-        if len(loaded) != 1:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="config_entry_required",
-            )
-        return loaded[0]
 
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if entry is None or entry.domain != DOMAIN:
-        raise ServiceValidationError(
-            translation_domain=DOMAIN,
-            translation_key="config_entry_not_found",
-            translation_placeholders={"entry_id": entry_id},
-        )
+def _ensure_loaded(hass: HomeAssistant, entry: PolycomConfigEntry) -> None:
+    """Refuse to act on a phone that isn't set up right now."""
     if entry.state is not ConfigEntryState.LOADED:
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="config_entry_not_loaded",
-            translation_placeholders={"title": entry.title},
+            translation_placeholders={"name": _phone_name(hass, entry)},
         )
-    return entry
+
+
+async def _async_get_entries(
+    hass: HomeAssistant, call: ServiceCall
+) -> list[PolycomConfigEntry]:
+    """
+    Return the loaded phones an action call refers to.
+
+    The phones may be chosen as devices, given by config_entry_id, or left
+    out when only one phone is set up.
+    """
+    if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is not None:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry is None or entry.domain != DOMAIN:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="config_entry_not_found",
+                translation_placeholders={"entry_id": entry_id},
+            )
+        _ensure_loaded(hass, entry)
+        return [entry]
+
+    if device_ids := call.data.get(ATTR_DEVICE_ID):
+        device_registry = dr.async_get(hass)
+        entries: list[PolycomConfigEntry] = []
+        for device_id in device_ids:
+            device = device_registry.async_get(device_id)
+            entry = next(
+                (
+                    entry
+                    for entry_id in (device.config_entries if device else ())
+                    if (entry := hass.config_entries.async_get_entry(entry_id))
+                    and entry.domain == DOMAIN
+                ),
+                None,
+            )
+            if entry is None:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="not_a_speakerphone"
+                )
+            _ensure_loaded(hass, entry)
+            if entry not in entries:
+                entries.append(entry)
+        return entries
+
+    loaded = hass.config_entries.async_loaded_entries(DOMAIN)
+    if len(loaded) != 1:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="config_entry_required",
+        )
+    return loaded
 
 
 async def _async_send(
+    hass: HomeAssistant,
     entry: PolycomConfigEntry,
     command: Callable[[PolycomApiClient], Awaitable[Any]],
-    translation_key: str = "action_failed",
 ) -> None:
     """Send a command to a phone, reporting a refusal as an error."""
     try:
@@ -83,35 +129,61 @@ async def _async_send(
     except PolycomApiClientError as exception:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
-            translation_key=translation_key,
-            translation_placeholders={"error": str(exception)},
+            translation_key="command_failed",
+            translation_placeholders={
+                "name": _phone_name(hass, entry),
+                "error": str(exception),
+            },
         ) from exception
 
 
-async def _async_active_call_handle(entry: PolycomConfigEntry) -> str:
-    """Look up the handle of the phone's current call, as it is right now."""
+def _is_ringing(call: dict[str, Any]) -> bool:
+    """Return whether a call is an incoming call that's still ringing."""
+    # callStatus version 2 has a Ringing flag; version 1 only the "Offering" state
+    return call.get("Ringing") == "1" or call.get("CallState") == "Offering"
+
+
+async def _async_call_handle(
+    hass: HomeAssistant, entry: PolycomConfigEntry, *, ringing: bool
+) -> str:
+    """
+    Look up a call's handle on the phone, as it is right now.
+
+    With ringing, the incoming call that's ringing; otherwise the current call.
+    """
     client = entry.runtime_data.client
     try:
         try:
-            call = active_call(await client.async_get_calls())
+            calls = await client.async_get_calls()
         except PolycomApiClientError:
-            call = None
+            calls = []
+        if ringing:
+            call = next((call for call in calls if _is_ringing(call)), None)
+        else:
+            call = active_call(calls)
         # Fall back to the older callStatus, which reports a single call
-        if call is None:
+        if call is None and not calls:
             call = await client.async_get_call_status() or None
+            if call is not None and ringing and not _is_ringing(call):
+                call = None
     except PolycomApiClientError as exception:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
-            translation_key="action_failed",
-            translation_placeholders={"error": str(exception)},
+            translation_key="command_failed",
+            translation_placeholders={
+                "name": _phone_name(hass, entry),
+                "error": str(exception),
+            },
         ) from exception
     if call is None or not call.get("CallHandle"):
         raise ServiceValidationError(
             translation_domain=DOMAIN,
-            translation_key="no_active_call",
-            translation_placeholders={"title": entry.title},
+            translation_key="no_ringing_call" if ringing else "no_active_call",
+            translation_placeholders={"name": _phone_name(hass, entry)},
         )
-    return str(call["CallHandle"])
+    # callStatus version 1 writes the handle as "0x4a0ae008"; version 2, which
+    # the manual says the call commands take, writes it as "4a0ae008"
+    return str(call["CallHandle"]).removeprefix("0x")
 
 
 @callback
@@ -119,40 +191,52 @@ def async_setup_services(hass: HomeAssistant) -> None:
     """Register the integration's actions."""
 
     async def async_reboot(call: ServiceCall) -> None:
-        """Reboot a phone once any active call has ended."""
-        entry = _async_get_entry(hass, call)
-        await _async_send(entry, lambda client: client.async_reboot(), "reboot_failed")
-        LOGGER.info("Polycom device %s rebooting", entry.title)
+        """Reboot phones once any active call has ended."""
+        for entry in await _async_get_entries(hass, call):
+            await _async_send(hass, entry, lambda client: client.async_reboot())
+            LOGGER.info("Polycom device %s rebooting", _phone_name(hass, entry))
 
     async def async_dial(call: ServiceCall) -> None:
-        """Call a number from a phone."""
-        entry = _async_get_entry(hass, call)
-        await _async_send(
-            entry,
-            lambda client: client.async_dial(
-                call.data[ATTR_NUMBER], call.data.get(ATTR_LINE)
-            ),
-        )
-        await entry.runtime_data.coordinator.async_request_refresh()
+        """Call a number from phones."""
+        for entry in await _async_get_entries(hass, call):
+            await _async_send(
+                hass,
+                entry,
+                lambda client: client.async_dial(
+                    call.data[ATTR_NUMBER], call.data.get(ATTR_LINE)
+                ),
+            )
+            await entry.runtime_data.coordinator.async_request_refresh()
 
     async def async_answer_call(call: ServiceCall) -> None:
-        """Answer a phone's incoming call."""
-        entry = _async_get_entry(hass, call)
-        await _async_send(entry, lambda client: client.async_answer_call())
-        await entry.runtime_data.coordinator.async_request_refresh()
+        """Answer phones' incoming calls."""
+        for entry in await _async_get_entries(hass, call):
+            await _async_send(hass, entry, lambda client: client.async_answer_call())
+            await entry.runtime_data.coordinator.async_request_refresh()
 
     async def async_reject_call(call: ServiceCall) -> None:
-        """Reject a phone's incoming call."""
-        entry = _async_get_entry(hass, call)
-        await _async_send(entry, lambda client: client.async_reject_call())
-        await entry.runtime_data.coordinator.async_request_refresh()
+        """Reject phones' incoming calls."""
+        for entry in await _async_get_entries(hass, call):
+            # Without the call's handle the phone answers 4003 "Operation not
+            # allowed" (seen on a Trio 8800)
+            handle = await _async_call_handle(hass, entry, ringing=True)
+            await _async_send(
+                hass,
+                entry,
+                lambda client, handle=handle: client.async_reject_call(handle),
+            )
+            await entry.runtime_data.coordinator.async_request_refresh()
 
     async def async_end_call(call: ServiceCall) -> None:
-        """Hang up a phone's current call."""
-        entry = _async_get_entry(hass, call)
-        handle = await _async_active_call_handle(entry)
-        await _async_send(entry, lambda client: client.async_end_call(handle))
-        await entry.runtime_data.coordinator.async_request_refresh()
+        """Hang up phones' current calls."""
+        for entry in await _async_get_entries(hass, call):
+            handle = await _async_call_handle(hass, entry, ringing=False)
+            await _async_send(
+                hass,
+                entry,
+                lambda client, handle=handle: client.async_end_call(handle),
+            )
+            await entry.runtime_data.coordinator.async_request_refresh()
 
     for service, handler, schema in (
         (SERVICE_REBOOT, async_reboot, PHONE_SCHEMA),

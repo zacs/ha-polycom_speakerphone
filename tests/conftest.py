@@ -2,8 +2,9 @@
 Shared fixtures for the Polycom Speakerphone tests.
 
 By default every endpoint the integration polls answers with an anonymized
-capture from a real, idle Trio 8800 (see ``fixtures/README.md``). Tests
-override single endpoints to cover other states.
+capture from a real, idle Trio 8800; a capture taken during a call is also
+available (see ``fixtures/README.md``). Tests override single endpoints to
+cover other states.
 """
 
 from __future__ import annotations
@@ -29,7 +30,10 @@ if TYPE_CHECKING:
         AiohttpClientMocker,
     )
 
-FIXTURES = Path(__file__).parent / "fixtures" / "trio_8800_idle"
+FIXTURES = Path(__file__).parent / "fixtures"
+IDLE = "trio_8800_idle"
+IN_CALL = "trio_8800_in_call"
+RINGING = "trio_8800_ringing"
 
 HOST = "192.168.1.50"
 PASSWORD = "secret"  # noqa: S105
@@ -41,7 +45,6 @@ ENDPOINTS: dict[str, tuple[str, str]] = {
     "call_status": ("get", "/api/v1/webCallControl/callStatus"),
     "device_stats": ("get", "/api/v1/mgmt/device/stats"),
     "line_info": ("get", "/api/v2/mgmt/lineInfo"),
-    "session_stats": ("get", "/api/v1/mgmt/media/sessionStats"),
     "communication_info": ("get", "/api/v1/mgmt/media/communicationInfo"),
     "calls": ("get", "/api/v2/webCallControl/callStatus"),
     "call_logs": ("get", "/api/v1/mgmt/callLogs"),
@@ -53,22 +56,6 @@ ENDPOINTS: dict[str, tuple[str, str]] = {
     "end_call": ("post", "/api/v1/callctrl/endCall"),
 }
 
-# A connected call as callStatus version 2 reports it, from the manual
-CONNECTED_CALL: dict[str, str] = {
-    "CallHandle": "b5576ff8",
-    "Type": "Incoming",
-    "RemotePartyName": "Test 1171",
-    "RemotePartyNumber": "1171",
-    "CallState": "Connected",
-    "Protocol": "SIP",
-    "StartTime": "2017-08-24T12:07:49",
-    "DurationSeconds": "25",
-    "LineID": "1",
-    "CallSequence": "1",
-    "Ringing": "0",
-    "Muted": "0",
-}
-
 
 @dataclass
 class RawBody:
@@ -77,34 +64,35 @@ class RawBody:
     body: Any
 
 
-def load_body(name: str) -> Any:
+def load_body(name: str, capture: str = IDLE) -> Any:
     """Return the captured response body for an endpoint."""
-    path = FIXTURES / f"{name}.json"
+    path = FIXTURES / capture / f"{name}.json"
     if path.exists():
         return json.loads(path.read_text())
     # No capture of the commands yet; assume plain success
     return {"Status": "2000"}
 
 
-def load_data(name: str) -> Any:
+def load_data(name: str, capture: str = IDLE) -> Any:
     """Return the ``data`` part of a captured response, safe to modify."""
-    return copy.deepcopy(load_body(name)["data"])
+    return copy.deepcopy(load_body(name, capture)["data"])
 
 
 def mock_device(
     aioclient_mock: AiohttpClientMocker,
     host: str = HOST,
+    capture: str = IDLE,
     **overrides: Any,
 ) -> None:
     """
     Register mocked responses for every endpoint of one device.
 
-    An override may be a payload for the response's ``data`` key, a
-    ``RawBody`` with the whole response, an ``int`` HTTP status, or an
-    exception instance to raise.
+    Endpoints answer from the given capture (idle by default). An override
+    may be a payload for the response's ``data`` key, a ``RawBody`` with the
+    whole response, an ``int`` HTTP status, or an exception instance to raise.
     """
     for name, (method, path) in ENDPOINTS.items():
-        value = overrides.get(name, RawBody(load_body(name)))
+        value = overrides.get(name, RawBody(load_body(name, capture)))
         url = f"https://{host}{path}"
         register = getattr(aioclient_mock, method)
         if isinstance(value, BaseException):

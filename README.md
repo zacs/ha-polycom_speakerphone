@@ -43,7 +43,7 @@ The ringing, remote party and missed calls entities are only created if the phon
 
 ### Actions
 
-Every action takes an optional `config_entry_id` to choose the speakerphone; with a single speakerphone it can be left out.
+Every action takes the speakerphone's device as `device_id`, picked by name in the action editor. With a single speakerphone it can be left out.
 
 - **`poly.dial`**: Call an extension, phone number or SIP address. Takes `number` and an optional `line` (defaults to line 1).
 - **`poly.answer_call`**: Answer the incoming call.
@@ -56,9 +56,11 @@ For example, to call the kitchen from the office speakerphone when a button is p
 ```yaml
 action: poly.dial
 data:
-  config_entry_id: <pick the office speakerphone in the action editor>
+  device_id: <pick the office speakerphone in the action editor>
   number: "1002"
 ```
+
+Automations written for 0.2.0 that choose the speakerphone with `config_entry_id` keep working.
 
 ## Screenshot
 
@@ -128,6 +130,10 @@ This integration uses the Polycom Voice REST API. For more information, see:
 - [Poly UC Software and Poly Voice Software REST API Reference Manual (PDF)](https://kaas.hpcloud.hp.com/pdf-public/pdf_14672705_en-US-1.pdf)
 
 ## Troubleshooting
+
+### HACS can't find `custom_components/polycom_speakerphone/manifest.json`
+
+Before 0.2.0 the integration's folder in this repository was named `polycom_speakerphone`; it's now `poly`. HACS remembers the old folder until Home Assistant restarts, so updating from 0.1.x can fail with `No manifest.json file found 'custom_components/polycom_speakerphone/manifest.json'`. Restart Home Assistant and download the update again. If it still fails, remove the repository in HACS, add it again and download it; your speakerphones' settings and entities are kept.
 
 ### Connection Issues
 - Confirm connectivity and credentials by visiting `https://<YOUR_IP>/api/v2/mgmt/device/info` with username `Polycom` and your admin password. You should see a JSON blob of device details. 

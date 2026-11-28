@@ -93,9 +93,11 @@ def _call_duration(data: dict[str, Any]) -> int | None:
     # The manual's examples use both spellings
     duration = call.get("DurationSeconds", call.get("DurationInSeconds"))
     try:
-        return int(duration)
+        seconds = int(duration)
     except (TypeError, ValueError):
         return None
+    # callStatus version 1 reports -1 while the call is still ringing
+    return seconds if seconds >= 0 else None
 
 
 def _remote_party(data: dict[str, Any]) -> str | None:
@@ -135,9 +137,7 @@ def _missed_calls(data: dict[str, Any]) -> int | None:
 
 
 def _last_called_number(data: dict[str, Any]) -> str | None:
-    """Return the last number dialed, from session stats or the call log."""
-    if number := _section(data, "session_stats").get("LastCalledNumber"):
-        return number
+    """Return the last number dialed, from the placed call log."""
     if (latest := _latest(_call_log(data, "placed") or [])) is None:
         return None
     number = latest.get("RemotePartyNumber")
@@ -251,7 +251,8 @@ ENTITY_DESCRIPTIONS: tuple[PolycomSensorEntityDescription, ...] = (
         key="remote_party",
         translation_key="remote_party",
         value_fn=_remote_party,
-        exists_fn=lambda data: "calls" in data,
+        # Either version of callStatus reports the remote party
+        exists_fn=lambda data: "calls" in data or "call_status" in data,
     ),
     PolycomSensorEntityDescription(
         key="missed_calls",

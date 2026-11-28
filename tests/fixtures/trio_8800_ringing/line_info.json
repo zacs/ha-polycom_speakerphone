@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "CallAppearances": [
+        "41d9d008"
+      ],
+      "Type": "Shared",
+      "CallServers": [
+        {
+          "Port": "5060",
+          "ID": "1",
+          "RegistrationStatus": "Registered",
+          "Working": "True",
+          "Expires": "3600",
+          "Transport": "DNSnaptr",
+          "Address": "192.0.2.10"
+        }
+      ],
+      "ID": "1",
+      "Label": "1001",
+      "RegistrationStatus": "Registered",
+      "ForwardingConfig": {},
+      "Assigned": "True",
+      "Active": "True",
+      "DoNotDisturb": "False",
+      "Username": "192.0.2.10"
+    }
+  ],
+  "Status": "2000"
+}
